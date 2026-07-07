@@ -34,8 +34,9 @@ export function classifyPersistence(text: string): "persistent" | "short_term" |
   // persistent: config assignment — KEY="value" or KEY='value'
   if (/=\s*["']/.test(text)) return "persistent"
 
-  // persistent: config assignment — KEY=value (word followed by = and non-whitespace)
-  if (/\b\w+\s*=\s*\S+/.test(text)) return "persistent"
+  // persistent: config assignment — UPPERCASE_IDENT=value (at least 2 uppercase letters before =)
+  // Narrower than generic \b\w+= to avoid false positives on Chinese text like "性能=高"
+  if (/\b[A-Z][A-Z_0-9]+\s*=\s*\S+/.test(text)) return "persistent"
 
   // discard: short meta-conversation (≤10 chars, purely Chinese filler or
   // known English greetings). Long enough substantive text like
