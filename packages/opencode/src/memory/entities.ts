@@ -205,5 +205,7 @@ export function traverseGraph(from: string, opts?: { relation?: string; depth?: 
 
   const params = relationFilter ? [from, relationFilter, maxDepth, relationFilter] : [from, maxDepth]
 
-  return Database.use((db) => db.$client.query(sqlStr).all(...params) as GraphPath[])
+  return Database.Client()
+    .$client.query(sqlStr)
+    .all(...params) as GraphPath[]
 }
