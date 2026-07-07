@@ -1,0 +1,21 @@
+Graph traversal and subgraph query tool for the memory entity-relation
+graph. Use this to explore how named entities in memory relate to each
+other and to inspect entity metadata.
+
+Two operations:
+
+1. **traverse** — starting from a named entity, follow relations outward to
+   discover connected entities.
+   - params: `from` (required), `relation` (optional filter), `depth`
+     (default 2, max 5)
+   - returns paths showing entity connections (source --[relation]--> target)
+   - example: traverse("TAIL_MAX_TOKENS") shows connected entities
+
+2. **subgraph** — given entity names, return all relationships among them.
+   - params: `entities` (array of names, required)
+   - shows each entity's type, tier, confidence, and any relations between them
+
+Each entity carries: name, type (function/api/config/concept/user_pref/file),
+tier (persistent/short_term), and confidence (0.0–1.0).
+
+For general memory text search, use the `memory` tool instead.
