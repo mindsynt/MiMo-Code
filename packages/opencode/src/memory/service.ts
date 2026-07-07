@@ -28,6 +28,18 @@ export interface Interface {
   }) => Effect.Effect<
     Array<{ path: string; snippet: string; score: number; scope: string; scope_id: string; type: string }>
   >
+
+  readonly graphTraverse: (input: { from: string; relation?: string; depth?: number }) => Effect.Effect<
+    Array<{
+      source_name: string
+      relation_type: string | null
+      target_name: string
+      target_type: string
+      depth: number
+    }>
+  >
+
+  readonly decayEntities: () => Effect.Effect<{ pruned: number }>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Memory") {}
@@ -114,7 +126,9 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       // Over-fetch (3x, capped) so the relative floor can trim common-word
       // noise without starving the list when there ARE enough real hits.
       const fetchLimit = Math.min(limit * 3, 50)
-      const rows = Database.Client().$client.query(sql).all(ftsQuery, ...params, fetchLimit) as SearchRow[]
+      const rows = Database.Client()
+        .$client.query(sql)
+        .all(ftsQuery, ...params, fetchLimit) as SearchRow[]
 
       // FTS5 bm25() returns lower = better; convert to higher = better for caller
       const mapped = rows.map((r) => ({
@@ -133,10 +147,26 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       return mapped.filter((r, i) => i === 0 || r.score >= cutoff).slice(0, limit)
     })
 
+    const graphTraverse = Effect.fn("Memory.graphTraverse")(function* (input: {
+      from: string
+      relation?: string
+      depth?: number
+    }) {
+      const { traverseGraph } = yield* Effect.promise(() => import("./entities"))
+      return yield* Effect.sync(() => traverseGraph(input.from, { relation: input.relation, depth: input.depth }))
+    })
+
+    const decayEntities = Effect.fn("Memory.decayEntities")(function* () {
+      const { decayLowConfidence } = yield* Effect.promise(() => import("./entities"))
+      return yield* Effect.sync(() => decayLowConfidence())
+    })
+
     return Service.of({
       root: rootEff,
       reconcile,
       search,
+      graphTraverse,
+      decayEntities,
     })
   }),
 )

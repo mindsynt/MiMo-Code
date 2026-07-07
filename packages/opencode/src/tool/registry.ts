@@ -6,6 +6,7 @@ import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { HistoryTool } from "./history"
+import { MemoryGraphTool } from "./memory-graph"
 import { MemoryTool } from "./memory"
 import { ReadTool } from "./read"
 import { ActorTool } from "./actor"
@@ -144,6 +145,7 @@ export const layer = Layer.effect(
     const changedirtool = yield* ChangeDirectoryTool
     const skilltool = yield* SkillTool
     const historytool = yield* HistoryTool
+    const memorygraphtool = yield* MemoryGraphTool
     const memorytool = yield* MemoryTool
     const tasktool = yield* TaskTool
     const crontool = yield* CronTool
@@ -233,6 +235,7 @@ export const layer = Layer.effect(
           planexit: Tool.init(planexit),
           planenter: Tool.init(planenter),
           memory: Tool.init(memorytool),
+          memorygraph: Tool.init(memorygraphtool),
           history: Tool.init(historytool),
           task: Tool.init(tasktool),
           cron: Tool.init(crontool),
@@ -263,6 +266,7 @@ export const layer = Layer.effect(
             tool.planexit,
             tool.planenter,
             tool.memory,
+            tool.memorygraph,
             tool.history,
             tool.task,
             ...(Flag.MIMOCODE_EXPERIMENTAL_CRON ? [tool.cron] : []),
@@ -310,9 +314,7 @@ export const layer = Layer.effect(
     })
 
     const describeTask = Effect.fn("ToolRegistry.describeTask")(function* (agent: Agent.Info) {
-      const items = (yield* agents.list()).filter(
-        (item) => item.mode !== "primary" && !item.hidden,
-      )
+      const items = (yield* agents.list()).filter((item) => item.mode !== "primary" && !item.hidden)
       const filtered = items.filter(
         (item) => Permission.evaluate("task", item.name, agent.permission).action !== "deny",
       )
@@ -330,11 +332,7 @@ export const layer = Layer.effect(
       let filtered = (yield* all()).filter((tool) => {
         if (tool.id === CodeSearchTool.id || tool.id === WebSearchTool.id) {
           if (tool.id === WebSearchTool.id) {
-            return (
-              input.providerID === ProviderID.opencode ||
-              input.providerID === "xiaomi" ||
-              Flag.MIMOCODE_ENABLE_EXA
-            )
+            return input.providerID === ProviderID.opencode || input.providerID === "xiaomi" || Flag.MIMOCODE_ENABLE_EXA
           }
           return input.providerID === ProviderID.opencode || Flag.MIMOCODE_ENABLE_EXA
         }
