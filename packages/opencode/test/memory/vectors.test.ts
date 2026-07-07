@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterEach } from "bun:test"
 import { Database, eq } from "@/storage"
 import { ChunkTable, VectorTable } from "../../src/memory/vectors.sql"
-import { VectorIndex, resetVectorIndex } from "../../src/memory/vectors"
+import { VectorIndex, resetVectorIndex, generateEmbedding } from "../../src/memory/vectors"
 
 function createTables() {
   const db = Database.Client().$client
@@ -94,6 +94,29 @@ describe("VectorIndex", () => {
     expect(idx.search(new Float32Array([1, 0, 0]))).toEqual([])
   })
 
+  test("searchText generates embedding and finds results", async () => {
+    Database.use((db) =>
+      db.insert(ChunkTable).values({ id: 50, chunk_text: "token budget configuration", created_at: Date.now() }).run(),
+    )
+    Database.use((db) =>
+      db.insert(ChunkTable).values({ id: 51, chunk_text: "the weather is nice today", created_at: Date.now() }).run(),
+    )
+
+    const idx = new VectorIndex(384)
+    // Add real embeddings via generateEmbedding
+    const [v50, v51] = await Promise.all([
+      generateEmbedding("token budget configuration"),
+      generateEmbedding("the weather is nice today"),
+    ])
+    idx.add(50, v50, "token budget configuration")
+    idx.add(51, v51, "the weather is nice today")
+
+    const results = await idx.searchText("how to configure token budget", 2)
+    expect(results).toHaveLength(2)
+    expect(results[0].chunkText).toBe("token budget configuration")
+    expect(results[0].score).toBeGreaterThan(0.5)
+  })
+
   test("clear removes all", () => {
     for (let i = 1; i <= 3; i++) {
       Database.use((db) =>
@@ -113,5 +136,30 @@ describe("VectorIndex", () => {
     idx.clear()
     expect(idx.size).toBe(0)
     expect(idx.search(new Float32Array([1, 0, 0]))).toEqual([])
+  })
+})
+
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  let dot = 0
+  for (let i = 0; i < a.length; i++) dot += a[i] * b[i]
+  return dot
+}
+
+describe("generateEmbedding", () => {
+  test("generates 384-dimensional vector", async () => {
+    const vec = await generateEmbedding("hello world")
+    expect(vec).toBeInstanceOf(Float32Array)
+    expect(vec.length).toBe(384)
+  })
+
+  test("similar texts produce similar embeddings", async () => {
+    const [v1, v2, v3] = await Promise.all([
+      generateEmbedding("how to configure token budget"),
+      generateEmbedding("token budget configuration"),
+      generateEmbedding("the weather is nice today"),
+    ])
+    const sim12 = cosineSimilarity(v1, v2)
+    const sim13 = cosineSimilarity(v1, v3)
+    expect(sim12).toBeGreaterThan(sim13)
   })
 })

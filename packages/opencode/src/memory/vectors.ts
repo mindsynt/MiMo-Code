@@ -1,10 +1,29 @@
 import { Database, eq, sql } from "@/storage"
 import { ChunkTable, VectorTable } from "./vectors.sql"
+import { pipeline } from "@xenova/transformers"
 
 export interface SearchHit {
   chunkId: number
   chunkText: string
   score: number
+}
+
+let embedFn: ((text: string) => Promise<Float32Array>) | null = null
+
+export async function generateEmbedding(text: string): Promise<Float32Array> {
+  if (!embedFn) {
+    const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+      quantized: true,
+    })
+    embedFn = async (t: string) => {
+      const result = await extractor(t.slice(0, 2048), {
+        pooling: "mean",
+        normalize: true,
+      })
+      return new Float32Array(result.data as Float32Array)
+    }
+  }
+  return embedFn(text)
 }
 
 export class VectorIndex {
@@ -68,6 +87,11 @@ export class VectorIndex {
     }
     results.sort((a, b) => b.score - a.score)
     return results.slice(0, topK)
+  }
+
+  async searchText(text: string, topK = 10): Promise<SearchHit[]> {
+    const queryVec = await generateEmbedding(text)
+    return this.search(queryVec, topK)
   }
 
   remove(chunkId: number): void {
