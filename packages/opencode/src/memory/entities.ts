@@ -98,7 +98,7 @@ export function upsertRelation(input: { source: string; target: string; type: st
     Database.use((db) =>
       db
         .update(RelationTable)
-        .set({ weight: existing.weight + delta, last_seen: now })
+        .set({ weight: Math.min(1.0, existing.weight + delta), last_seen: now })
         .where(eq(RelationTable.id, existing.id))
         .run(),
     )

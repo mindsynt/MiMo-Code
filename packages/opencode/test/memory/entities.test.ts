@@ -162,6 +162,17 @@ describe("upsertRelation", () => {
     expect(paths).toHaveLength(1)
   })
 
+  test("caps weight at 1.0 on repeated insert", () => {
+    upsertEntity({ name: "a2", type: "concept" })
+    upsertEntity({ name: "b2", type: "concept" })
+    // Insert many times; weight should cap at 1.0 not overflow
+    for (let i = 0; i < 20; i++) {
+      upsertRelation({ source: "a2", target: "b2", type: "related" })
+    }
+    const paths = traverseGraph("a2", { depth: 1 })
+    expect(paths).toHaveLength(1)
+  })
+
   test("auto-creates entities when source or target does not exist", () => {
     upsertRelation({ source: "auto_src", target: "auto_tgt", type: "calls" })
 
