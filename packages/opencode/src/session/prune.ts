@@ -360,6 +360,44 @@ export const layer: Layer.Layer<
       }
 
       crossed.set(input.sessionID, already)
+
+      // Fire-and-forget memory pipeline — import dynamically to avoid circular deps.
+      yield* Effect.promise(() => import("./memory-pipeline")).pipe(
+        Effect.catch(() => Effect.succeed(undefined as { runMemoryPipeline?: Function } | undefined)),
+        Effect.flatMap((mod) => {
+          if (!mod?.runMemoryPipeline) return Effect.void
+          return session.messages({ sessionID: input.sessionID, agentID: "main" }).pipe(
+            Effect.catchIf(NotFoundError.isInstance, () =>
+              Effect.succeed(undefined as MessageV2.WithParts[] | undefined),
+            ),
+            Effect.flatMap((msgs) => {
+              if (!msgs) return Effect.void
+              let lastUserText = ""
+              let lastMsgID = ""
+              for (const msg of msgs.toReversed()) {
+                if (msg.info.role === "user" && !msg.info.system) {
+                  for (const p of msg.parts) {
+                    if (p.type === "text") lastUserText += p.text
+                  }
+                  lastUserText = lastUserText.trim()
+                  lastMsgID = msg.info.id
+                  break
+                }
+              }
+              if (!lastUserText) return Effect.void
+              return Effect.promise(() =>
+                mod.runMemoryPipeline!({
+                  sessionID: input.sessionID,
+                  text: lastUserText,
+                  messageID: lastMsgID,
+                }),
+              )
+            }),
+          )
+        }),
+        Effect.ignore,
+        Effect.forkDetach,
+      )
     })
 
     // Each turn end, decide (based on cache-TTL + pressure) whether to soft-trim
@@ -454,9 +492,7 @@ export const layer: Layer.Layer<
       }
     })
 
-    const maxThresholdCrossed = Effect.fn("SessionPrune.maxThresholdCrossed")(function* (
-      sessionID: SessionID,
-    ) {
+    const maxThresholdCrossed = Effect.fn("SessionPrune.maxThresholdCrossed")(function* (sessionID: SessionID) {
       return maxCrossed.has(sessionID)
     })
 
