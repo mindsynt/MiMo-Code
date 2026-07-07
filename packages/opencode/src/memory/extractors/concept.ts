@@ -7,11 +7,15 @@ import type { ExtractedEntity } from "../classification"
  * - "A策略/模式/架构/机制/方案" → type: "concept", confidence: 0.5
  * - 驼峰概念: CamelCaseIdentifiers → type: "concept", confidence: 0.4
  * - X化: 模块化/标准化/自动化 → type: "concept", confidence: 0.4
+ *
+ * @param text - Input text to extract concepts from.
+ * @param excludeNames - Optional set of names to exclude (e.g. from extractCodeEntities), for cross-extractor dedup.
  */
-export function extractConcepts(text: string): ExtractedEntity[] {
+export function extractConcepts(text: string, excludeNames?: Set<string>): ExtractedEntity[] {
   const seen = new Map<string, ExtractedEntity>()
 
   function add(name: string, type: string, confidence: number) {
+    if (excludeNames?.has(name)) return
     const existing = seen.get(name)
     if (!existing || existing.confidence < confidence) {
       seen.set(name, { name, type, confidence })
