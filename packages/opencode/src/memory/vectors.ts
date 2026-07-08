@@ -1,6 +1,5 @@
 import { Database, eq, sql } from "@/storage"
 import { ChunkTable, VectorTable } from "./vectors.sql"
-import { pipeline } from "@xenova/transformers"
 
 export interface SearchHit {
   chunkId: number
@@ -12,6 +11,7 @@ let embedFn: ((text: string) => Promise<Float32Array>) | null = null
 
 export async function generateEmbedding(text: string): Promise<Float32Array> {
   if (!embedFn) {
+    const { pipeline } = await import("@xenova/transformers")
     const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
       quantized: true,
     })
