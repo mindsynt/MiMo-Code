@@ -194,6 +194,11 @@ Use \`memory-graph\` tool to query this graph. It supports:
   - \`traverse(from, relation?, depth?)\` \u2014 find connected entities
   - \`subgraph(entities)\` \u2014 find relationships among a set of entities
 
+When you need COMBINED search across text, entities, and semantics,
+use the \`memory-search\` tool instead. It runs BM25 full-text search,
+graph traversal, and semantic vector embedding search in parallel and
+fuses the results into a single ranked list.
+
 Example: \`traverse("TAIL_MAX_TOKENS")\` returns connected entities
 like "checkpoint boundary" with their relationship types.
 

@@ -7,6 +7,7 @@ import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { HistoryTool } from "./history"
 import { MemoryGraphTool } from "./memory-graph"
+import { MemorySearchTool } from "./memory-search"
 import { MemoryTool } from "./memory"
 import { ReadTool } from "./read"
 import { ActorTool } from "./actor"
@@ -146,6 +147,7 @@ export const layer = Layer.effect(
     const skilltool = yield* SkillTool
     const historytool = yield* HistoryTool
     const memorygraphtool = yield* MemoryGraphTool
+    const memorysearchtool = yield* MemorySearchTool
     const memorytool = yield* MemoryTool
     const tasktool = yield* TaskTool
     const crontool = yield* CronTool
@@ -236,6 +238,7 @@ export const layer = Layer.effect(
           planenter: Tool.init(planenter),
           memory: Tool.init(memorytool),
           memorygraph: Tool.init(memorygraphtool),
+          memorysearch: Tool.init(memorysearchtool),
           history: Tool.init(historytool),
           task: Tool.init(tasktool),
           cron: Tool.init(crontool),
@@ -267,6 +270,7 @@ export const layer = Layer.effect(
             tool.planenter,
             tool.memory,
             tool.memorygraph,
+            tool.memorysearch,
             tool.history,
             tool.task,
             ...(Flag.MIMOCODE_EXPERIMENTAL_CRON ? [tool.cron] : []),

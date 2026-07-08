@@ -1,0 +1,17 @@
+Combined hybrid search across all memory layers: BM25 full-text,
+entity-relation graph, and semantic vector embedding. Returns fused
+results ranked by relevance.
+
+Three retrieval modes fused in "hybrid" mode (default):
+- **graph**: entity-relation traversal — deterministic, no hallucination.
+  Best for verifying exact relationships between known entities.
+- **vector**: semantic similarity via embeddings — finds conceptually
+  related content even when keywords don't match.
+- **fts**: BM25 keyword search over markdown bodies. Tried last.
+
+Hybrid mode runs all three in parallel, normalizes scores by source,
+and returns the top K fused results. Graph hits are weighted 1.2x,
+vector 1.0x, FTS 0.8x.
+
+For plain text search, use the `memory` tool instead (lighter).
+For entity relationship exploration, use `memory-graph` (specialized).
