@@ -32,6 +32,7 @@ import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util"
+import { errorMessage } from "@/util/error"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
@@ -199,7 +200,14 @@ export const layer = Layer.effect(
           const namespace = path.basename(match, path.extname(match))
           // `match` is an absolute filesystem path from `Glob.scanSync(..., { absolute: true })`.
           // Import it as `file://` so Node on Windows accepts the dynamic import.
-          const mod = yield* Effect.promise(() => import(`${pathToFileURL(match).href}?v=${Date.now()}`))
+          const mod = yield* Effect.tryPromise({
+            try: () => import(`${pathToFileURL(match).href}?v=${Date.now()}`),
+            catch: (err) => err,
+          }).pipe(Effect.catch((err) => {
+            log.error("failed to load file tool, skipping", { path: match, error: errorMessage(err) })
+            return Effect.succeed(undefined)
+          }))
+          if (!mod) continue
           for (const [id, def] of Object.entries<ToolDefinition>(mod)) {
             custom.push(fromPlugin(id === "default" ? namespace : `${namespace}_${id}`, def))
           }

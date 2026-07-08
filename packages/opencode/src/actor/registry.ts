@@ -74,6 +74,7 @@ export interface Interface {
   readonly renderForAgent: (sessionID: SessionID) => Effect.Effect<string>
   readonly agentTypeFor: (sessionID: SessionID, actorID: string) => Effect.Effect<string>
   readonly isSystemSpawned: (sessionID: SessionID, actorID: string) => Effect.Effect<boolean>
+  readonly servesCheckpoint: (sessionID: SessionID, actorID: string | undefined) => Effect.Effect<boolean>
   readonly allocateActorID: (sessionID: SessionID, agentType: string) => Effect.Effect<string>
 }
 
@@ -330,6 +331,29 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
       return SYSTEM_SPAWNED_AGENT_TYPES.has(actor.agent)
     })
 
+    // Whether this actor's context is maintained by the session checkpoint flow.
+    // Checkpoint serves main + peer only; subagents use per-actor compaction, and
+    // system-spawned agents (checkpoint-writer/dream/distill) maintain nothing.
+    // Single source of truth for both the memory-instructions gate (LLM.buildSystemArray)
+    // and the checkpoint self-trigger gate (SessionPrune.fireCheckpoints). Two
+    // orthogonal exclusions kept explicit (agent TYPE vs MODE) so a future system
+    // agent spawned as mode:"peer" can't silently slip back in — see prune.ts.
+    const servesCheckpoint = Effect.fn("ActorRegistry.servesCheckpoint")(function* (
+      sessionID: SessionID,
+      actorID: string | undefined,
+    ) {
+      // No agentID (or literal "main") → main runLoop. Fail open: main and peer
+      // must never silently lose checkpoints / memory instructions. "main" has no
+      // registry row, so short-circuit before the read.
+      if (!actorID || actorID === "main") return true
+      // Single read, two orthogonal exclusions derived from it: agent TYPE
+      // (system-spawned) and actor MODE (subagent). Unregistered/race → fail open.
+      const actor = yield* get(sessionID, actorID)
+      if (!actor) return true
+      if (SYSTEM_SPAWNED_AGENT_TYPES.has(actor.agent)) return false
+      return actor.mode !== "subagent"
+    })
+
     const allocateActorID = Effect.fn("ActorRegistry.allocateActorID")(function* (
       sessionID: SessionID,
       agentType: string,
@@ -422,6 +446,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
       renderForAgent,
       agentTypeFor,
       isSystemSpawned,
+      servesCheckpoint,
       allocateActorID,
     })
   }),

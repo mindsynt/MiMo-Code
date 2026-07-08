@@ -82,6 +82,7 @@ export type WorkflowNode =
       actorID?: string
       durationMs?: number
       resultSummary?: string
+      resultFull?: string
       status: "running" | "succeeded" | "failed"
     }
   | {
@@ -699,8 +700,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         syncedWorkspace = workspace
       }
       const start = Date.now() - 30 * 24 * 60 * 60 * 1000
+      // roots: true so child sessions (subagents, workers) don't crowd root
+      // sessions out of the server-side limit
       const sessionListPromise = sdk.client.session
-        .list({ start: start })
+        .list({ start: start, roots: true })
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
 
       // blocking - include session.list when continuing a session
@@ -820,7 +823,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         async refresh() {
           const start = Date.now() - 30 * 24 * 60 * 60 * 1000
           const list = await sdk.client.session
-            .list({ start })
+            .list({ start, roots: true })
             .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
           setStore("session", reconcile(list))
         },
@@ -836,19 +839,27 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         },
         async sync(sessionID: string) {
           if (fullSyncedSessions.has(sessionID)) return
-          const [session, messages, todo, diff, actors, task] = await Promise.all([
+          const [session, messages, todo, diff, actors, task, children] = await Promise.all([
             sdk.client.session.get({ sessionID }, { throwOnError: true }),
             sdk.client.session.messages({ sessionID, limit: 100, agent_id: "*" }),
             sdk.client.session.todo({ sessionID }),
             sdk.client.session.diff({ sessionID }),
             sdk.client.session.actors({ sessionID }),
             sdk.client.session.task({ sessionID }),
+            // children aren't in the root-only session list; fetch them so the
+            // session dialog can show the current session's child sessions
+            sdk.client.session.children({ sessionID }).catch(() => undefined),
           ])
           setStore(
             produce((draft) => {
               const match = Binary.search(draft.session, sessionID, (s) => s.id)
               if (match.found) draft.session[match.index] = session.data!
               if (!match.found) draft.session.splice(match.index, 0, session.data!)
+              for (const child of children?.data ?? []) {
+                const childMatch = Binary.search(draft.session, child.id, (s) => s.id)
+                if (childMatch.found) draft.session[childMatch.index] = child
+                if (!childMatch.found) draft.session.splice(childMatch.index, 0, child)
+              }
               draft.todo[sessionID] = todo.data ?? []
               draft.task[sessionID] = task.data ?? []
               const flat = (messages.data ?? []).map((x) => x.info)

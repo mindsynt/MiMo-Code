@@ -37,7 +37,7 @@ export function DialogSessionList() {
 
   const [searchResults, { refetch }] = createResource(search, async (query) => {
     if (!query) return undefined
-    const result = await sdk.client.session.list({ search: query, limit: 30 })
+    const result = await sdk.client.session.list({ search: query, limit: 30, roots: true })
     return result.data ?? []
   })
 
