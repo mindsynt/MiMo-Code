@@ -26,10 +26,16 @@ export function classifyPersistence(text: string): "persistent" | "short_term" |
   if (/`[\w.]+\([^)]*\)`/.test(text)) return "persistent"
 
   // persistent: rule declarations
-  if (/(永远|总是|必须|禁止|应该使用)/.test(text)) return "persistent"
+  if (/(永远|总是|必须|禁止|应该使用|规范|约定|规则(?:是|：|:))/.test(text)) return "persistent"
 
   // persistent: architecture decisions
   if (/(决定|选用|采用|放弃|用.+?而不是)/.test(text)) return "persistent"
+
+  // persistent: English rule markers
+  if (/^(?:Rule|Convention|Note|Policy|Always|Never)\s*[:]/im.test(text)) return "persistent"
+
+  // persistent: "must/should" statements
+  if (/\b(?:must|should)\s+(?:use|be|follow|set|keep)\b/i.test(text)) return "persistent"
 
   // persistent: config assignment — KEY="value" or KEY='value'
   if (/=\s*["']/.test(text)) return "persistent"

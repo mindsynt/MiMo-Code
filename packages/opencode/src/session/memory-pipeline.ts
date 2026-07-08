@@ -5,10 +5,12 @@ import {
   parseRelationLLMOutput,
   setCallLLMForRelations,
 } from "@/memory/extractors/relations"
+import { extractRules } from "@/memory/extractors/rules"
 import { classifyPersistence, classifyPersonal, type ExtractedEntity } from "@/memory/classification"
 import { extractCodeEntities } from "@/memory/extractors/code"
 import { extractConcepts } from "@/memory/extractors/concept"
 import { upsertEntity, upsertRelation, boostEntityConfidence } from "@/memory/entities"
+import { upsertRule } from "@/memory/rules"
 import { upsertPreference } from "@/memory/profile"
 import { ChunkTable } from "@/memory/vectors.sql"
 import { Database, eq } from "@/storage"
@@ -175,6 +177,19 @@ export async function runMemoryPipeline(input: {
       category: "explicit_preference",
       confidence: p.confidence,
       source: "conversation",
+    })
+  }
+
+  // ── Phase C: Rule extraction ──────────────────────────────────────────────────
+  // Pattern-based, no LLM call — deterministic, zero hallucination.
+  const rules = extractRules(input.text)
+  for (const rule of rules) {
+    upsertRule({
+      slug: rule.slug,
+      text: rule.text,
+      confidence: rule.confidence,
+      sessionID: input.sessionID,
+      messageID: input.messageID,
     })
   }
 
