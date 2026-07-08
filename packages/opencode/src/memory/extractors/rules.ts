@@ -15,6 +15,10 @@ export type ExtractedRule = {
   confidence: number
   /** Category of the rule for classification */
   category: "convention" | "decision" | "constraint" | "preference"
+  /** Names of entities (files, concepts, APIs) this rule governs — extracted
+   *  from the original conversation text alongside the rule statement.
+   *  Used to link the rule to specific code entities via `governs` relations. */
+  governs: string[]
 }
 
 // ── Chinese patterns ────────────────────────────────────────────────────────
@@ -63,6 +67,54 @@ function toCategory(text: string): ExtractedRule["category"] {
 }
 
 /**
+ * Extracts file and concept names from the conversation text around a rule.
+ *
+ * Scans the entire turn text for:
+ * - Backtick file paths: `session.sql`, `src/main.ts`
+ * - CamelCase identifiers: DependencyInjection, EventBus
+ * - import paths: from "lodash"
+ *
+ * These are used to link the rule to relevant graph entities via `governs`
+ * relations, enabling file-scoped rule queries.
+ */
+export function extractGovernedEntities(text: string): string[] {
+  const found = new Set<string>()
+
+  // Backtick file paths: `session.sql`, `src/main.ts`, `./components/Button.tsx`
+  const filePattern = /`([^`]+\.(?:ts|js|tsx|jsx|json|md|css|scss|html|py|rs|go|java|kt|sql|yaml|yml|toml))`/g
+  for (const match of text.matchAll(filePattern)) {
+    // Normalize: strip leading `./` and `../` for consistent matching
+    const normalized = match[1].replace(/^(?:\.\.\/)+|^\.\//g, "")
+    found.add(normalized)
+  }
+
+  // Backtick plain identifiers: `session`, `authMiddleware`, `UserService`
+  const idPattern = /`([\w.]+)`/g
+  for (const match of text.matchAll(idPattern)) {
+    const name = match[1]
+    if (name.includes(".") || name === "") continue
+    if (/^\d/.test(name)) continue
+    found.add(name)
+  }
+
+  // CamelCase concepts mentioned alongside the rule
+  const camelPattern = /\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g
+  for (const match of text.matchAll(camelPattern)) {
+    found.add(match[1])
+  }
+
+  // import from packages
+  const importPattern = /from\s+["']([^"']+)["']/g
+  for (const match of text.matchAll(importPattern)) {
+    const pkg = match[1]
+    if (pkg.startsWith(".") || pkg.startsWith("@")) continue
+    found.add(pkg)
+  }
+
+  return Array.from(found)
+}
+
+/**
  * Extracts project rules from a single turn of conversation text.
  *
  * Returns an empty array when no rules are found. Pure function —
@@ -81,6 +133,7 @@ export function extractRules(text: string): ExtractedRule[] {
       text: ruleText.trim(),
       confidence: baseConfidence,
       category: toCategory(ruleText),
+      governs: extractGovernedEntities(text),
     })
   }
 

@@ -10,7 +10,7 @@ import { classifyPersistence, classifyPersonal, type ExtractedEntity } from "@/m
 import { extractCodeEntities } from "@/memory/extractors/code"
 import { extractConcepts } from "@/memory/extractors/concept"
 import { upsertEntity, upsertRelation, boostEntityConfidence } from "@/memory/entities"
-import { upsertRule } from "@/memory/rules"
+import { upsertRule, linkRuleToEntity } from "@/memory/rules"
 import { upsertPreference } from "@/memory/profile"
 import { ChunkTable } from "@/memory/vectors.sql"
 import { Database, eq } from "@/storage"
@@ -191,6 +191,12 @@ export async function runMemoryPipeline(input: {
       sessionID: input.sessionID,
       messageID: input.messageID,
     })
+    // Link rule to entities it governs (files, concepts, APIs mentioned
+    // in the same conversation turn). Only creates relations when both
+    // the rule and the target entity already exist in the graph.
+    for (const governedName of rule.governs) {
+      linkRuleToEntity(rule.slug, governedName)
+    }
   }
 
   // ── Phase B: Relation extraction (only with entities) ─────────────────────────
