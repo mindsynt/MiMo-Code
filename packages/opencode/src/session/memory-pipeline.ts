@@ -12,11 +12,14 @@ import { upsertEntity, upsertRelation, boostEntityConfidence } from "@/memory/en
 import { ChunkTable } from "@/memory/vectors.sql"
 import { Database, eq } from "@/storage"
 import { Log } from "@/util"
+import { cleanupExpired } from "../memory/cleanup"
 import { Effect } from "effect"
 import { Deferred } from "effect"
 import type { SessionID } from "./schema"
 
 const log = Log.create({ service: "memory-pipeline" })
+
+let pipelineRunCount = 0
 
 /**
  * Two-phase memory pipeline:
@@ -102,6 +105,19 @@ export async function runMemoryPipeline(input: {
       source: "conversation",
       tier,
     })
+  }
+
+  // ── Periodic cleanup ────────────────────────────────────────────────────────────
+  pipelineRunCount++
+  if (pipelineRunCount % 50 === 0) {
+    try {
+      const result = cleanupExpired()
+      if (result.expiredChunks > 0 || result.expiredVectors > 0) {
+        log.info("periodic cleanup", result)
+      }
+    } catch (err) {
+      log.warn("periodic cleanup failed", { err })
+    }
   }
 
   // ── Phase 2: Chunk + embed (async, non-blocking) ─────────────────────────────
