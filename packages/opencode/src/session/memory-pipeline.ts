@@ -85,31 +85,9 @@ export async function runMemoryPipeline(input: {
 }): Promise<void> {
   const start = performance.now()
 
-  // Read config (fallback to defaults when Config service is unavailable, e.g. in tests)
-  let pipelineEnabled = true,
-    vectorsEnabled = true,
-    profileEnabled = true
-  let cleanupEnabled = true,
-    cleanupInterval = 50
-  try {
-    const { Config } = await import("@/config")
-    const cfg = Config.info()
-    const memCfg = cfg.memory ?? {}
-    pipelineEnabled = memCfg.pipeline?.enabled !== false
-    vectorsEnabled = memCfg.vectors?.enabled !== false
-    profileEnabled = memCfg.profile?.enabled !== false
-    cleanupEnabled = memCfg.cleanup?.enabled !== false
-    cleanupInterval = memCfg.cleanup?.interval ?? 50
-  } catch {
-    /* defaults */
-  }
-
   // ── Phase A: Classification ──────────────────────────────────────────────────
   const tier = classifyPersistence(input.text)
   if (tier === "discard") return
-
-  // Skip entity extraction when pipeline is disabled
-  if (!pipelineEnabled) return
 
   // ── Phase A: Entity extraction ────────────────────────────────────────────────
   const codeEntities = extractCodeEntities(input.text)
@@ -134,7 +112,7 @@ export async function runMemoryPipeline(input: {
 
   // ── Periodic cleanup ────────────────────────────────────────────────────────────
   pipelineRunCount++
-  if (cleanupEnabled && pipelineRunCount % cleanupInterval === 0) {
+  if (pipelineRunCount % 50 === 0) {
     try {
       const result = cleanupExpired()
       if (result.expiredChunks > 0 || result.expiredVectors > 0) {
@@ -146,7 +124,7 @@ export async function runMemoryPipeline(input: {
   }
 
   // ── Phase 2: Chunk + embed (async, non-blocking) ─────────────────────────────
-  if (vectorsEnabled && entities.length > 0) {
+  if (entities.length > 0) {
     const entityNames = entities.map((e) => e.name)
     const chunks = chunkText(input.text, entityNames)
     const createdChunkIds: number[] = []
@@ -189,17 +167,15 @@ export async function runMemoryPipeline(input: {
   }
 
   // ── Profile extraction ────────────────────────────────────────────────────────
-  if (profileEnabled) {
-    const prefs = classifyPersonal(input.text)
-    for (const p of prefs) {
-      upsertPreference({
-        key: p.key,
-        value: p.value,
-        category: "explicit_preference",
-        confidence: p.confidence,
-        source: "conversation",
-      })
-    }
+  const prefs = classifyPersonal(input.text)
+  for (const p of prefs) {
+    upsertPreference({
+      key: p.key,
+      value: p.value,
+      category: "explicit_preference",
+      confidence: p.confidence,
+      source: "conversation",
+    })
   }
 
   // ── Phase B: Relation extraction (only with entities) ─────────────────────────

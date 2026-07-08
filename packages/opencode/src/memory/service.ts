@@ -190,8 +190,12 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
             search,
             graphTraverse,
             decayEntities,
-            vectorSearch: undefined as never, // avoid circular ref
-          }),
+            vectorSearch: undefined as never,
+            getPreference: undefined as never,
+            listPreferences: undefined as never,
+            cleanupExpired: undefined as never,
+            runReflection: undefined as never,
+          } as Interface),
           {
             mode: "hybrid",
             topK: input.topK ?? 10,

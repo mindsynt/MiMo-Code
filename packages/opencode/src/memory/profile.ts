@@ -90,11 +90,8 @@ export function decayLowConfidencePreferences(): number {
       .run(),
   )
 
-  const pruned = Database.use((db) =>
-    db
-      .delete(ProfileTable)
-      .where(and(lt(ProfileTable.confidence, 0.01), eq(ProfileTable.category, "inferred_pattern")))
-      .run(),
+  const pruned = Database.Client().$client.run(
+    "DELETE FROM memory_user_profile WHERE confidence < 0.01 AND category = 'inferred_pattern'",
   )
   return pruned.changes ?? 0
 }

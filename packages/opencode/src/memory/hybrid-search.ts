@@ -1,6 +1,6 @@
 import { traverseGraph } from "./entities"
 import { getVectorIndex, generateEmbedding } from "./vectors"
-import type { Memory } from "./service"
+import type { Interface as MemoryInterface } from "./service"
 
 export type SearchMode = "graph" | "vector" | "fts" | "hybrid"
 
@@ -19,7 +19,7 @@ export interface SearchResult {
 export async function hybridSearch(
   query: string,
   memory:
-    | Memory.Interface
+    | MemoryInterface
     | {
         search: (input: {
           query: string
@@ -35,7 +35,9 @@ export async function hybridSearch(
     try {
       const entities = query.match(/\b\w+\b/g) ?? []
       if (entities.length === 0) return []
-      const paths = traverseGraph(entities[0])
+      const first = entities[0]
+      if (!first) return []
+      const paths = traverseGraph(first)
       return paths.slice(0, topK).map((p) => ({
         text: `${p.source_name} → ${p.target_name} (${p.relation_type})`,
         score: 1 / (1 + p.depth),
@@ -64,10 +66,11 @@ export async function hybridSearch(
 
   const runFts = async (): Promise<SearchResult[]> => {
     try {
-      const results = await memory.search({ query, limit: topK })
+      const raw = await (memory as any).search({ query, limit: topK })
+      const results: Array<{ snippet: string; score: number }> = Array.isArray(raw) ? raw : []
       return results.map((r) => ({
         text: r.snippet,
-        score: Math.max(0, (r as any).score ?? 0),
+        score: Math.max(0, r.score ?? 0),
         source: "fts" as const,
       }))
     } catch {
