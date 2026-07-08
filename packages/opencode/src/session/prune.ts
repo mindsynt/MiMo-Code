@@ -14,6 +14,9 @@ import type { ActorPromptOps } from "@/tool/actor"
 
 const log = Log.create({ service: "session.prune" })
 
+// Reflection trigger counter — fires every 5th checkpoint cycle.
+let reflectionCounter = 0
+
 const PRUNE_MINIMUM = 20_000
 const PRUNE_PROTECT = 40_000
 const PRUNE_PROTECTED_TOOLS = ["skill"]
@@ -398,6 +401,19 @@ export const layer: Layer.Layer<
         Effect.ignore,
         Effect.forkDetach,
       )
+
+      // Trigger reflection based on config — fire-and-forget.
+      const reflectionEnabled = cfg.memory?.reflection?.enabled !== false
+      const reflectionInterval = cfg.memory?.reflection?.interval ?? 5
+      if (reflectionEnabled) {
+        reflectionCounter++
+        if (reflectionCounter % reflectionInterval === 0) {
+          yield* Effect.promise(() => import("../memory/reflection").then((m) => m.runReflection())).pipe(
+            Effect.catch(() => Effect.void),
+            Effect.forkDetach,
+          )
+        }
+      }
     })
 
     // Each turn end, decide (based on cache-TTL + pressure) whether to soft-trim
