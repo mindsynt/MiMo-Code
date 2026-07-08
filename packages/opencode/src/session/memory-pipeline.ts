@@ -83,6 +83,8 @@ export async function runMemoryPipeline(input: {
   text: string
   messageID: string
 }): Promise<void> {
+  const start = performance.now()
+
   // Read config (fallback to defaults when Config service is unavailable, e.g. in tests)
   let pipelineEnabled = true,
     vectorsEnabled = true,
@@ -246,5 +248,10 @@ export async function runMemoryPipeline(input: {
     }
   } catch {
     // Phase B failure is non-fatal
+  }
+
+  const totalMs = Math.round(performance.now() - start)
+  if (totalMs > 1000) {
+    log.warn("memory pipeline exceeded 1s budget", { totalMs, sessionID: input.sessionID })
   }
 }
