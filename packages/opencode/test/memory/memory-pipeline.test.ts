@@ -1,9 +1,11 @@
 import { describe, expect, test, beforeAll, afterEach } from "bun:test"
-import { Database } from "@/storage"
+import { Database, sql } from "@/storage"
 import { EntityTable, RelationTable } from "../../src/memory/pipeline.sql"
+import { ChunkTable } from "../../src/memory/vectors.sql"
 import { queryEntity } from "../../src/memory/entities"
 import { setCallLLMForRelations } from "../../src/memory/extractors/relations"
-import { runMemoryPipeline } from "../../src/session/memory-pipeline"
+import { chunkText, runMemoryPipeline } from "../../src/session/memory-pipeline"
+import { resetVectorIndex } from "../../src/memory/vectors"
 import type { SessionID } from "../../src/session/schema"
 
 const sid = (s: string) => s as unknown as SessionID
@@ -31,6 +33,23 @@ function createTables() {
     last_seen INTEGER NOT NULL
   )`)
   db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_rel_pair ON memory_relation(source_id, target_id, type)")
+
+  db.run(`CREATE TABLE IF NOT EXISTS memory_chunk (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chunk_text TEXT NOT NULL,
+    entity_id INTEGER,
+    source TEXT NOT NULL DEFAULT 'conversation',
+    tier TEXT NOT NULL DEFAULT 'short_term',
+    ttl INTEGER,
+    created_at INTEGER NOT NULL,
+    last_accessed INTEGER
+  )`)
+  db.run(`CREATE TABLE IF NOT EXISTS memory_vector (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chunk_id INTEGER NOT NULL UNIQUE REFERENCES memory_chunk(id) ON DELETE CASCADE,
+    embedding BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+  )`)
 }
 
 beforeAll(() => {
@@ -40,6 +59,8 @@ beforeAll(() => {
 afterEach(() => {
   Database.use((db) => db.delete(RelationTable).run())
   Database.use((db) => db.delete(EntityTable).run())
+  Database.use((db) => db.delete(ChunkTable).run()) // cascades to VectorTable
+  resetVectorIndex()
   // Reset callLLMForRelations to default throwing function
   setCallLLMForRelations(async () => {
     throw new Error("callLLMForRelations not configured — test must set a mock")
@@ -348,5 +369,59 @@ describe("runMemoryPipeline — edge cases", () => {
     const ts = queryEntity("TypeScript")
     expect(ts).toBeDefined()
     expect(ts!.tier).toBe("persistent")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pipeline chunking
+// ---------------------------------------------------------------------------
+
+describe("pipeline chunking", () => {
+  test("chunkText splits by entity", () => {
+    const chunks = chunkText("采用缓存策略。使用 `Bun.write()` 写入文件。TypeScript 是主力语言。", [
+      "Bun.write",
+      "TypeScript",
+    ])
+    // Entity-based chunks: sentences containing "Bun.write" or "TypeScript"
+    const texts = chunks.map((c) => c.text)
+    expect(texts.some((t) => t.includes("Bun.write"))).toBe(true)
+    expect(texts.some((t) => t.includes("TypeScript"))).toBe(true)
+    // The sentence about "缓存策略" has no matching entity and should be skipped
+    expect(texts.some((t) => t.includes("缓存策略"))).toBe(false)
+  })
+
+  test("chunkText sliding window for long text", () => {
+    const longText = "A".repeat(1000)
+    const chunks = chunkText(longText, [])
+    // Entity-based fallback: first 512 chars
+    expect(chunks.length).toBeGreaterThan(1)
+    // Sliding window chunks (all after the first) should be <= 256 chars
+    for (let i = 1; i < chunks.length; i++) {
+      expect(chunks[i].text.length).toBeLessThanOrEqual(256)
+    }
+  })
+
+  test("chunkText fallback for empty entity list and short text", () => {
+    const shortText = "Hello world"
+    const chunks = chunkText(shortText, [])
+    // Fallback: first 512 chars
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0].text).toBe("Hello world")
+  })
+
+  test("runMemoryPipeline creates chunks for persistent content", async () => {
+    await runMemoryPipeline({
+      sessionID: sid("test-vec"),
+      text: "使用 `Bun.write(path, content)` 写入文件",
+      messageID: "msg-vec-1",
+    })
+    await new Promise((r) => setTimeout(r, 200))
+    const count = Database.use((db) =>
+      db
+        .select({ count: sql`COUNT(*)` })
+        .from(ChunkTable)
+        .get(),
+    )
+    expect(count!.count).toBeGreaterThan(0)
   })
 })
