@@ -6,6 +6,7 @@ import { Config } from "@/config"
 import { Memory } from "@/memory"
 import { MemoryFtsTable } from "@/memory/fts.sql"
 import { formatRulesForContext } from "@/memory/rules"
+import { buildFilteredContext } from "@/memory/filter"
 import { TaskRegistry } from "@/task/registry"
 import { ActorRegistry } from "@/actor/registry"
 import type { AgentOutcome, ForkContext } from "@/actor/spawn"
@@ -1244,13 +1245,14 @@ export const layer: Layer.Layer<
         lines.push("")
       }
 
-      // Section 7.2: project rules from entity-relation graph.
-      // Rules are extracted from conversation by the memory pipeline and
-      // stored as deterministic "rule" entities with provenance tracking.
-      // Injected here so the model applies them when generating code.
-      const rulesText = yield* Effect.sync(() => formatRulesForContext())
-      if (rulesText.trim()) {
-        lines.push(rulesText.trim())
+      // Section 7.2: project rules + active profile from memory graph.
+      // Three-layer filter: persistence (core/stable only), structure
+      // (deduplicate, prioritize rules over raw text), personalization
+      // (no current-entity context at rebuild time — filters can be
+      // applied by the model via memory search).
+      const filteredContext = buildFilteredContext()
+      if (filteredContext.trim()) {
+        lines.push(filteredContext.trim())
         lines.push("")
       }
 

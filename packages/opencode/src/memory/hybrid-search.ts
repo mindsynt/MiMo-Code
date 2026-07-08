@@ -92,7 +92,23 @@ export async function hybridSearch(
       score: (r.score / maxScore) * weights[r.source],
     }))
     fused.sort((a, b) => b.score - a.score)
-    return fused.slice(0, topK)
+
+    // Dedup: if graph results already cover a structured fact, suppress
+    // redundant vector/FTS results with near-identical text (cosmetic).
+    const seenKeys = new Set<string>()
+    const deduped: typeof fused = []
+    for (const item of fused) {
+      const key = item.text.slice(0, 80) // approximate dedup key
+      if (item.source === "graph") {
+        seenKeys.add(key)
+        deduped.push(item)
+      } else if (!seenKeys.has(key)) {
+        seenKeys.add(key)
+        deduped.push(item)
+      }
+    }
+
+    return deduped.slice(0, topK)
   }
 
   switch (mode) {
