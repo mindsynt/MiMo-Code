@@ -49,3 +49,21 @@ export function classifyPersistence(text: string): "persistent" | "short_term" |
 
   return "short_term"
 }
+
+export function classifyPersonal(text: string): Array<{ key: string; value: string; confidence: number }> {
+  const results: Array<{ key: string; value: string; confidence: number }> = []
+
+  // 显式偏好
+  const m1 = text.match(/(?:我喜欢用|我习惯用|我更倾向|优先使用|最好用|推荐使用)\s*[\`]?([\w.\-\/]+)[\`]?/)
+  if (m1) results.push({ key: "preferred_tool", value: m1[1], confidence: 0.9 })
+
+  // 否定偏好
+  const m2 = text.match(/(?:不要用|别用|不用|避免使用|少用)\s*[\`]?([\w.\-\/]+)[\`]?/)
+  if (m2) results.push({ key: "disliked_tool", value: m2[1], confidence: 0.8 })
+
+  // 规则声明
+  const m3 = text.match(/(?:必须|应该|要)\s*(?:使用|用)\s*[\`]?([\w.\-\/]+)[\`]?/)
+  if (m3) results.push({ key: "required_tool", value: m3[1], confidence: 0.7 })
+
+  return results
+}
