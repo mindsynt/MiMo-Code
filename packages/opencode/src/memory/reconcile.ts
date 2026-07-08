@@ -4,6 +4,7 @@ import { Database, eq } from "../storage"
 import { Log } from "../util"
 import { MemoryFtsTable } from "./fts.sql"
 import { parsePath, parseCcPath, parseCcFrontmatterType, type MemoryLocator } from "./paths"
+import { processMemoryFile } from "./memory-md"
 
 const log = Log.create({ service: "memory.reconcile" })
 
@@ -35,7 +36,10 @@ export async function walkCcRoot(base: string): Promise<string[]> {
   for (const entry of slugs) {
     if (!entry.isDirectory()) continue
     const memoryDir = path.join(base, entry.name, "memory")
-    const exists = await fs.stat(memoryDir).then(() => true).catch(() => false)
+    const exists = await fs
+      .stat(memoryDir)
+      .then(() => true)
+      .catch(() => false)
     if (!exists) continue
     const files = await walkMemoryDir(memoryDir)
     for (const f of files) out.push(f)
@@ -60,8 +64,7 @@ export async function indexFromDisk(
   const body = await Bun.file(absPath).text()
 
   // For CC files, derive type from frontmatter; mimo files keep loc.type from path.
-  const finalType =
-    bodyType === "cc" ? (parseCcFrontmatterType(body) ?? "free") : loc.type
+  const finalType = bodyType === "cc" ? (parseCcFrontmatterType(body) ?? "free") : loc.type
 
   Database.use((db) =>
     db
@@ -88,12 +91,24 @@ export async function indexFromDisk(
       })
       .run(),
   )
+
+  // Differentiated MEMORY.md processing: structured sections (Rules,
+  // Architecture decisions, etc.) go to entity graph + vector index;
+  // unstructured sections remain FTS-only (handled above).
+  // This bridges file memory and graph memory for core project rules.
+  if (loc.type === "memory" && bodyType === "mimo") {
+    await processMemoryFile(absPath, body).catch((err) => {
+      log.warn("memory.md structured processing failed", { path: absPath, err })
+    })
+  }
+
   return "updated"
 }
 
-export async function reconcileMemory(
-  roots: { mimo: string; cc?: string },
-): Promise<{ indexed: number; pruned: number }> {
+export async function reconcileMemory(roots: {
+  mimo: string
+  cc?: string
+}): Promise<{ indexed: number; pruned: number }> {
   // Collect disk paths from BOTH roots before pruning. If we pruned per-root,
   // enabling CC indexing on a fresh run would prune all mimo rows (and vice
   // versa) because each walk's set is missing the other root's paths.
@@ -103,10 +118,7 @@ export async function reconcileMemory(
 
   const indexed = new Map<string, string>(
     Database.use((db) =>
-      db
-        .select({ path: MemoryFtsTable.path, fingerprint: MemoryFtsTable.fingerprint })
-        .from(MemoryFtsTable)
-        .all(),
+      db.select({ path: MemoryFtsTable.path, fingerprint: MemoryFtsTable.fingerprint }).from(MemoryFtsTable).all(),
     ).map((r) => [r.path, r.fingerprint]),
   )
 

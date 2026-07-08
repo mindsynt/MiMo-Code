@@ -1237,11 +1237,17 @@ export const layer: Layer.Layer<
         lines.push("")
       }
 
-      // Section 7: project memory (full body, capped).
+      // Section 7: project memory (full body, capped, minus structured
+      // sections that are already covered by the graph in section 7.2).
+      // Dedup: strip ## Rules / Architecture decisions etc. so they
+      // don't appear both here and in the hybrid-retrieved section.
       if (memoryText.trim()) {
-        lines.push("## Project memory")
-        lines.push(memoryText.trim())
-        lines.push("")
+        const deduped = stripStructuredSections(memoryText)
+        if (deduped.trim()) {
+          lines.push("## Project memory (narrative)")
+          lines.push(deduped.trim())
+          lines.push("")
+        }
       }
 
       // Section 7.2: hybrid-retrieved memory via FTS + graph traversal.
@@ -1640,6 +1646,20 @@ function extractEntityNames(text: string): string[] {
     names.add(m[1].split("/")[0])
   }
   return Array.from(names).slice(0, 8)
+}
+
+/** Remove structured sections (## Rules, ## Architecture decisions, etc.)
+ *  from raw MEMORY.md text to avoid duplication with the graph-retrieved
+ *  content in Section 7.2. */
+function stripStructuredSections(text: string): string {
+  const STRUCTURED_PATTERNS = [
+    /^##+\s+(?:Rules|Architecture Decisions|Architecture Decision|Discovered Durable Knowledge|Conventions|项目规则|架构决策|命名规范)/im,
+  ]
+  let result = text
+  for (const pattern of STRUCTURED_PATTERNS) {
+    result = result.replace(pattern, "")
+  }
+  return result
 }
 
 // Test-only re-export so test code can call composeWriterPrompt without
