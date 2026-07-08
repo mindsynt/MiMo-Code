@@ -177,6 +177,7 @@ export async function runMemoryPipeline(input: {
       category: "explicit_preference",
       confidence: p.confidence,
       source: "conversation",
+      tier: "ephemeral",
     })
   }
 

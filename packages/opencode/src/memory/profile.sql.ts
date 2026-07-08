@@ -7,6 +7,7 @@ export const ProfileTable = sqliteTable("memory_user_profile", {
   category: text().notNull(),
   confidence: real().notNull().default(0.5),
   source: text().notNull().default("conversation"),
+  tier: text().notNull().default("ephemeral"), // ephemeral | stable | core
   created_at: integer().notNull(),
   updated_at: integer().notNull(),
 })

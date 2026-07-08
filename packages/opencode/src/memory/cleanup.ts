@@ -1,13 +1,24 @@
-import { Database, lt, eq, and } from "@/storage"
+import { Database, lt, eq, and, or } from "@/storage"
 import { sql } from "drizzle-orm"
 import { ChunkTable, VectorTable } from "./vectors.sql"
-import { Log } from "@/util"
+import { Log } from "../util"
 
 const log = Log.create({ service: "memory.cleanup" })
 
+/**
+ * Tier-aware cleanup:
+ * - core entities: 永不删除
+ * - stable entities: 长 TTL（由 ttl 列控制）
+ * - ephemeral entities: 短 TTL（由 ttl 列控制）
+ *
+ * Chunks without a tier column default to short_term — they get the
+ * existing TTL-based treatment.
+ */
 export function cleanupExpired(): { expiredChunks: number; expiredVectors: number } {
   const now = Date.now()
 
+  // Delete expired chunks (short_term + past TTL)
+  // Note: persistent/core chunks have ttl = null, so they're never matched
   const expiredChunks = Database.use((db) =>
     db
       .delete(ChunkTable)
