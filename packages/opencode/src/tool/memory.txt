@@ -67,3 +67,14 @@ they become recallable from any mimocode agent — including subagents
 that may be exposed to prompt-injected content. If that's not desired,
 keep cc_index disabled or filter `type` at search time to exclude
 the more sensitive categories.
+
+RELATED TOOL:
+When you need to explore relationships BETWEEN entities (not just text
+search), use the `memory-graph` tool instead. It provides:
+  - traverse(from, relation?, depth?) — follow entity relationships
+  - subgraph(entities) — query relationships among a set of entities
+
+The entity-relation graph is built automatically from conversation by
+the memory pipeline. It captures functions, APIs, configs, files, and
+concepts mentioned in conversation and the relationships between them
+(depends_on, implements, configures, calls, prefers, etc.).

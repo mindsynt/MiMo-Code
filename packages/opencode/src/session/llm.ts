@@ -176,6 +176,42 @@ If a dump shows "⚠️ Truncated at ~N tokens. Read(<path>, offset=L) for the r
 Memory entries name functions, files, flags, paths — those are CLAIMS about a point in time when they were written. Verify before acting on a specific name.
 
 Don't ask the user about something memory may already record.
+
+## Entity-relation graph
+
+Beyond the file-based memory, an entity-relation graph is automatically
+built from conversation by the memory pipeline (runs after every turn).
+It stores structured knowledge in SQLite tables:
+
+- **Entities**: named things (functions, APIs, configs, files, concepts)
+  with type, confidence (0.0\u20131.0), and tier (persistent / short_term).
+  High-frequency entities auto-upgrade to persistent.
+- **Relationships**: edges between entities \u2014 depends_on, implements,
+  configures, calls, prefers, part_of, similar_to, rejects \u2014 with
+  weight (0.0\u20131.0) that accumulates on repeated mention.
+
+Use \`memory-graph\` tool to query this graph. It supports:
+  - \`traverse(from, relation?, depth?)\` \u2014 find connected entities
+  - \`subgraph(entities)\` \u2014 find relationships among a set of entities
+
+Example: \`traverse("TAIL_MAX_TOKENS")\` returns connected entities
+like "checkpoint boundary" with their relationship types.
+
+Graph lookups are DETERMINISTIC (recursive SQL CTE, no hallucination).
+Prefer graph traversal over FTS when you need to verify exact
+relationships between known entities.
+
+## User profile
+
+User-specified preferences are automatically extracted from
+conversation and stored as key-value pairs with confidence scores.
+Categories: explicit_preference (user directly stated),
+inferred_pattern (repeated behavior detected), hidden_intent
+(low-confidence speculation).
+
+Access via \`memory.Service.getPreference(key)\` \u2014 not directly
+available as a tool. If you need profile data, use the \`memory\` tool
+with search terms like "preferred" or preference keys.
 `
 }
 
@@ -187,7 +223,7 @@ export type StreamInput = {
   agent: Agent.Info
   permission?: Permission.Ruleset
   system: string[]
-  prebuiltSystem?: string[]      // when set, skip buildSystemArray and use this verbatim
+  prebuiltSystem?: string[] // when set, skip buildSystemArray and use this verbatim
   messages: ModelMessage[]
   small?: boolean
   tools: Record<string, Tool>
@@ -219,7 +255,13 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/LL
 const live: Layer.Layer<
   Service,
   never,
-  Auth.Service | Config.Service | Provider.Service | Plugin.Service | Permission.Service | ActorRegistry.Service | Memory.Service
+  | Auth.Service
+  | Config.Service
+  | Provider.Service
+  | Plugin.Service
+  | Permission.Service
+  | ActorRegistry.Service
+  | Memory.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -360,12 +402,10 @@ const live: Layer.Layer<
         : isWorkflow
           ? input.messages
           : [
-              ...system.map(
-                (x): ModelMessage => ({
-                  role: "system",
-                  content: x,
-                }),
-              ),
+              ...system.map((x): ModelMessage => ({
+                role: "system",
+                content: x,
+              })),
               ...input.messages,
             ]
 
@@ -672,7 +712,7 @@ const live: Layer.Layer<
                     maxAttempts: 10,
                     reason: error instanceof Error ? error.message : String(error),
                     nextDelayMs: delayMs,
-                  })
+                  }),
                 )
               })
 
@@ -680,9 +720,9 @@ const live: Layer.Layer<
               Effect.tapError((error) => {
                 if (!isTransientCapacityError(error)) return Effect.void
                 return Ref.updateAndGet(attemptRef, (n) => n + 1).pipe(
-                  Effect.flatMap((nextAttempt) => publishRetryEvent(error, nextAttempt))
+                  Effect.flatMap((nextAttempt) => publishRetryEvent(error, nextAttempt)),
                 )
-              })
+              }),
             )
 
             const result = yield* streamWithTelemetry.pipe(
@@ -715,10 +755,7 @@ export const defaultLayer = Layer.suspend(() =>
 )
 
 function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
-  const disabled = Permission.disabled(
-    Object.keys(input.tools),
-    Agent.runtimePermission(input.agent, input.permission),
-  )
+  const disabled = Permission.disabled(Object.keys(input.tools), Agent.runtimePermission(input.agent, input.permission))
   return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
 }
 
