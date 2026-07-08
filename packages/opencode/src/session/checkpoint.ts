@@ -1652,14 +1652,32 @@ function extractEntityNames(text: string): string[] {
  *  from raw MEMORY.md text to avoid duplication with the graph-retrieved
  *  content in Section 7.2. */
 function stripStructuredSections(text: string): string {
-  const STRUCTURED_PATTERNS = [
-    /^##+\s+(?:Rules|Architecture Decisions|Architecture Decision|Discovered Durable Knowledge|Conventions|项目规则|架构决策|命名规范)/im,
-  ]
-  let result = text
-  for (const pattern of STRUCTURED_PATTERNS) {
-    result = result.replace(pattern, "")
+  // Strip structured sections (## Rules, ## Architecture decisions, etc.)
+  // that are already covered by the graph-retrieved memory in Section 7.2.
+  // Parse headers, filter out structured ones, keep everything else.
+  const STRUCTURED = new Set([
+    "rules",
+    "architecture decisions",
+    "architecture decision",
+    "discovered durable knowledge",
+    "conventions",
+    "项目规则",
+    "架构决策",
+    "命名规范",
+  ])
+  const lines = text.split("\n")
+  const out: string[] = []
+  let inStructured = false
+  for (const line of lines) {
+    const h = line.match(/^#{1,3}\s+(.+)/)
+    if (h) {
+      inStructured = STRUCTURED.has(h[1].toLowerCase().trim())
+      if (!inStructured) out.push(line)
+    } else if (!inStructured) {
+      out.push(line)
+    }
   }
-  return result
+  return out.join("\n").trim()
 }
 
 // Test-only re-export so test code can call composeWriterPrompt without
