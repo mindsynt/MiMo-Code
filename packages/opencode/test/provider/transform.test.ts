@@ -1018,6 +1018,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
 
     expect(result).toHaveLength(1)
     expect(result[0].content).toEqual([
+      { type: "reasoning", text: "Let me think about this..." },
       {
         type: "tool-call",
         toolCallId: "test",
@@ -2268,8 +2269,7 @@ describe("ProviderTransform.message - cache control on gateway", () => {
     const result = ProviderTransform.message(msgs, model, {}) as any[]
 
     const hasMarker = (msg: any) =>
-      !!msg.providerOptions?.openrouter ||
-      msg.content?.some?.((c: any) => c.providerOptions?.openrouter)
+      !!msg.providerOptions?.openrouter || msg.content?.some?.((c: any) => c.providerOptions?.openrouter)
 
     // The last two messages (index 3 user, 4 assistant) are both marked.
     expect(hasMarker(result[3])).toBe(true)

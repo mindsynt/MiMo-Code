@@ -183,14 +183,14 @@ function normalizeMessages(
         const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
         const reasoningText = reasoningParts.map((part: any) => part.text).join("")
 
-        // Filter out reasoning parts from content
-        const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
-
-        // Include reasoning_content | reasoning_details directly on the message for all assistant messages
+        // Include reasoning_content | reasoning_details both in the content array AND
+        // in providerOptions.openaiCompatible so the field reaches the API request body
+        // regardless of which SDK path serializes the messages (standard openai-compatible
+        // SDK reads providerOptions.openaiCompatible, custom copilot SDK reads content
+        // parts, and non-interleaved SDKs also read content parts).
         if (reasoningText) {
           return {
             ...msg,
-            content: filteredContent,
             providerOptions: {
               ...msg.providerOptions,
               openaiCompatible: {
@@ -201,10 +201,7 @@ function normalizeMessages(
           }
         }
 
-        return {
-          ...msg,
-          content: filteredContent,
-        }
+        return msg
       }
 
       return msg
@@ -416,12 +413,18 @@ function limitImages(msgs: ModelMessage[]): ModelMessage[] {
       if (part.type !== "image") return part
       if (toDrop > 0) {
         toDrop--
-        return { type: "text" as const, text: `[Image omitted: exceeds the configured limit of ${maxImages} prompt image(s).]` }
+        return {
+          type: "text" as const,
+          text: `[Image omitted: exceeds the configured limit of ${maxImages} prompt image(s).]`,
+        }
       }
       if (maxSize !== undefined) {
         const size = imageByteSize(String(part.image))
         if (size !== undefined && size > maxSize) {
-          return { type: "text" as const, text: `[Image omitted: exceeds the configured ${maxSize}-byte prompt image size limit.]` }
+          return {
+            type: "text" as const,
+            text: `[Image omitted: exceeds the configured ${maxSize}-byte prompt image size limit.]`,
+          }
         }
       }
       return part
@@ -1224,9 +1227,7 @@ function flattenDiscriminatedUnion(schema: JSONSchema.BaseSchema | JSONSchema7):
   const propertyOwners: Record<string, unknown[]> = {}
   for (const v of variants) {
     if (!v.properties) continue
-    const variantValue = discriminator
-      ? (v.properties as Record<string, any>)[discriminator]?.const
-      : undefined
+    const variantValue = discriminator ? (v.properties as Record<string, any>)[discriminator]?.const : undefined
     for (const [key, prop] of Object.entries(v.properties as Record<string, any>)) {
       if (key === discriminator) continue
       if (!(key in properties)) properties[key] = prop
@@ -1265,7 +1266,9 @@ function flattenDiscriminatedUnion(schema: JSONSchema.BaseSchema | JSONSchema7):
     properties[discriminator] = {
       type: "string",
       enum: enumValues,
-      description: baseDescription ? `${baseDescription}\n\nPer-${discriminator}: ${hints}.` : `Per-${discriminator}: ${hints}.`,
+      description: baseDescription
+        ? `${baseDescription}\n\nPer-${discriminator}: ${hints}.`
+        : `Per-${discriminator}: ${hints}.`,
     }
   }
 
