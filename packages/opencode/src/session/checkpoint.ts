@@ -5,8 +5,7 @@ import { Bus } from "@/bus"
 import { Config } from "@/config"
 import { Memory } from "@/memory"
 import { MemoryFtsTable } from "@/memory/fts.sql"
-import { formatRulesForContext } from "@/memory/rules"
-import { buildFilteredContext } from "@/memory/filter"
+import { filterMemory, type FilterableMemory } from "@/memory/filter"
 import { TaskRegistry } from "@/task/registry"
 import { ActorRegistry } from "@/actor/registry"
 import type { AgentOutcome, ForkContext } from "@/actor/spawn"
@@ -1245,14 +1244,65 @@ export const layer: Layer.Layer<
         lines.push("")
       }
 
-      // Section 7.2: project rules + active profile from memory graph.
-      // Three-layer filter: persistence (core/stable only), structure
-      // (deduplicate, prioritize rules over raw text), personalization
-      // (no current-entity context at rebuild time — filters can be
-      // applied by the model via memory search).
-      const filteredContext = buildFilteredContext()
-      if (filteredContext.trim()) {
-        lines.push(filteredContext.trim())
+      // Section 7.2: hybrid-retrieved memory via FTS + graph traversal.
+      // Mirrors the storage strategy: FTS finds relevant text, graph
+      // traversal grounds results in deterministic entity relations,
+      // reducing retrieval hallucination vs. pure vector similarity.
+      const queryText =
+        recentUserEntries.length > 0 ? recentUserEntries.join(" ").slice(0, 2000) : "current project context"
+
+      const memoryItems: FilterableMemory[] = []
+
+      // FTS search
+      try {
+        const hits = yield* memory.search({ query: queryText, limit: 10 }) as Effect.Effect<any[]>
+        if (Array.isArray(hits)) {
+          for (const r of hits) {
+            memoryItems.push({
+              type: "chunk",
+              text: typeof r.snippet === "string" ? r.snippet : "",
+              score: typeof r.score === "number" ? r.score : 0.5,
+              structured: false,
+            })
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      // Graph traversal from query entities → find governs relations
+      const currentEntities = extractEntityNames(queryText)
+      for (const entity of currentEntities) {
+        try {
+          const paths = yield* memory.graphTraverse({ from: entity, relation: "governs", depth: 1 }) as Effect.Effect<
+            any[]
+          >
+          if (Array.isArray(paths)) {
+            for (const p of paths) {
+              memoryItems.push({
+                type: "rule",
+                tier: "core",
+                key: `rule:${p.source_name}`,
+                text: `${p.source_name} → ${p.target_name} (governs)`,
+                score: 0.9,
+                structured: true,
+                relatesTo: [p.target_name, p.source_name],
+              })
+            }
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+
+      // Three-layer filter
+      const items = filterMemory(memoryItems, { currentEntities, limit: 15 })
+      if (items.length > 0) {
+        lines.push("## Retrieved memories (hybrid)")
+        const ruleLines = items.filter((i) => i.type === "rule").map((r, i) => `${i + 1}. ${r.text}`)
+        const otherLines = items.filter((i) => i.type !== "rule").map((r) => `  - ${r.text}`)
+        if (ruleLines.length > 0) lines.push(...ruleLines)
+        if (otherLines.length > 0) lines.push(...otherLines)
         lines.push("")
       }
 
@@ -1572,6 +1622,25 @@ export async function isWriterRunning(input: { sessionID: SessionID }) {
 }
 
 export * as SessionCheckpoint from "./checkpoint"
+
+/** Extract potential entity names (files, modules, concepts) from text. */
+function extractEntityNames(text: string): string[] {
+  const names = new Set<string>()
+  // Backtick paths: `session.sql`, `src/main.ts`
+  for (const m of text.matchAll(/`([^`]+)`/g)) {
+    const name = m[1].replace(/^(?:\.\.\/)+|^\.\//g, "")
+    names.add(name)
+  }
+  // CamelCase: DependencyInjection, EventBus
+  for (const m of text.matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g)) {
+    names.add(m[1])
+  }
+  // Package names: from "lodash", from "react"
+  for (const m of text.matchAll(/(?:from|import)\s+["']([^"'.][^"']*)["']/g)) {
+    names.add(m[1].split("/")[0])
+  }
+  return Array.from(names).slice(0, 8)
+}
 
 // Test-only re-export so test code can call composeWriterPrompt without
 // triggering the full SessionCheckpoint Service stack.
