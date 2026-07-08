@@ -49,6 +49,15 @@ export interface Interface {
       chunkId?: number
     }>
   >
+
+  readonly getPreference: (
+    key: string,
+  ) => Effect.Effect<{ key: string; value: string; category: string; confidence: number; source: string } | undefined>
+  readonly listPreferences: (
+    category?: string,
+  ) => Effect.Effect<Array<{ key: string; value: string; category: string; confidence: number; source: string }>>
+  readonly cleanupExpired: () => Effect.Effect<{ expiredChunks: number; expiredVectors: number }>
+  readonly runReflection: () => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Memory") {}
@@ -191,6 +200,26 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       )
     })
 
+    const getPreferenceEff = Effect.fn("Memory.getPreference")(function* (key: string) {
+      const { getPreference } = yield* Effect.promise(() => import("./profile"))
+      return yield* Effect.sync(() => getPreference(key))
+    })
+
+    const listPreferencesEff = Effect.fn("Memory.listPreferences")(function* (category?: string) {
+      const { listPreferences } = yield* Effect.promise(() => import("./profile"))
+      return yield* Effect.sync(() => listPreferences(category))
+    })
+
+    const cleanupExpiredEff = Effect.fn("Memory.cleanupExpired")(function* () {
+      const { cleanupExpired } = yield* Effect.promise(() => import("./cleanup"))
+      return yield* Effect.sync(() => cleanupExpired())
+    })
+
+    const runReflectionEff = Effect.fn("Memory.runReflection")(function* () {
+      const { runReflection } = yield* Effect.promise(() => import("./reflection"))
+      return yield* Effect.promise(() => runReflection())
+    })
+
     return Service.of({
       root: rootEff,
       reconcile,
@@ -198,6 +227,10 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       graphTraverse,
       decayEntities,
       vectorSearch,
+      getPreference: getPreferenceEff,
+      listPreferences: listPreferencesEff,
+      cleanupExpired: cleanupExpiredEff,
+      runReflection: runReflectionEff,
     })
   }),
 )
