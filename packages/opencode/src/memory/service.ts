@@ -40,6 +40,15 @@ export interface Interface {
   >
 
   readonly decayEntities: () => Effect.Effect<{ pruned: number }>
+
+  readonly vectorSearch: (input: { query: string; topK?: number }) => Effect.Effect<
+    Array<{
+      text: string
+      score: number
+      source: string
+      chunkId?: number
+    }>
+  >
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Memory") {}
@@ -161,12 +170,34 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       return yield* Effect.sync(() => decayLowConfidence())
     })
 
+    const vectorSearch = Effect.fn("Memory.vectorSearch")(function* (input: { query: string; topK?: number }) {
+      const { hybridSearch } = yield* Effect.promise(() => import("./hybrid-search"))
+      return yield* Effect.promise(() =>
+        hybridSearch(
+          input.query,
+          Service.of({
+            root: rootEff,
+            reconcile,
+            search,
+            graphTraverse,
+            decayEntities,
+            vectorSearch: undefined as never, // avoid circular ref
+          }),
+          {
+            mode: "hybrid",
+            topK: input.topK ?? 10,
+          },
+        ),
+      )
+    })
+
     return Service.of({
       root: rootEff,
       reconcile,
       search,
       graphTraverse,
       decayEntities,
+      vectorSearch,
     })
   }),
 )

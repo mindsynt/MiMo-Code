@@ -1,3 +1,4 @@
 export * as Memory from "./service"
 export * as MemoryEntities from "./entities"
 export * as MemoryClassification from "./classification"
+export * as MemoryVectors from "./vectors"
