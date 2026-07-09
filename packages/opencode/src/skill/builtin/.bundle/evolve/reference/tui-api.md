@@ -2,17 +2,54 @@
 
 ## File Format
 
-```tsx
-import type { TuiPlugin } from "@mimo-ai/plugin/tui"
+The module must **default-export an object with a `tui()` function** — a named
+`export const tui` will fail to load with "must default export an object with tui()".
 
-export const tui: TuiPlugin = async (api, options, meta) => {
+```tsx
+import type { TuiPlugin, TuiPluginModule } from "@mimo-ai/plugin/tui"
+
+const tui: TuiPlugin = async (api, options, meta) => {
   // api — the full TUI plugin API
   // options — plugin options from config (if any)
   // meta — plugin metadata (id, source, version, etc.)
 }
+
+const plugin: TuiPluginModule & { id: string } = {
+  id: "my-plugin",
+  tui,
+}
+
+export default plugin
 ```
 
 File extension should be `.tsx` (JSX support for UI components).
+
+## How plugins load
+
+Files are auto-discovered from two directories at TUI startup:
+
+- `~/.config/mimocode/tui/*.{ts,tsx,js}` — global
+- `<project>/.mimocode/tui/*.{ts,tsx,js}` — project-local
+
+Plugins can also be declared in `tui.json` (global `~/.config/mimocode/tui.json`
+or project `.mimocode/tui.json`) via the `plugin` array (file URLs or npm specs).
+Either way, a **restart is required** — TUI plugins are only scanned at startup.
+
+## Rendering model — opentui, NOT HTML
+
+Components render to the **terminal** via opentui + Solid.js. HTML elements
+(`<div>`, `<span style="css">`, CSS properties) do not exist. Use:
+
+- `<box>` — flex container. Props: `flexDirection`, `gap`, `padding{Top,Bottom,Left,Right}`, `flexGrow`, `flexShrink`, `justifyContent`, `backgroundColor`
+- `<text>` — text line. Props: `fg={color}`, event handlers like `onMouseDown`
+- `<span style={{ fg: color }}>` — inline colored segment inside `<text>`
+- `<b>` — bold text
+
+Colors come from the theme: `api.theme.current.text`, `.textMuted`, `.primary`,
+`.success`, etc. (RGBA values). Do not hard-code hex CSS strings.
+
+Solid.js rules apply: no `useState`/`useEffect`; use `createMemo`, `createSignal`,
+`<Show>`, and accessor functions (`const theme = () => api.theme.current`).
 
 ## TuiPluginApi
 
@@ -48,10 +85,10 @@ api.route.register([
   {
     name: "my-dashboard",
     render: (input) => (
-      <div>
-        <h1>Dashboard</h1>
-        <p>Params: {JSON.stringify(input.params)}</p>
-      </div>
+      <box>
+        <text><b>Dashboard</b></text>
+        <text>Params: {JSON.stringify(input.params)}</text>
+      </box>
     ),
   },
 ])
@@ -68,10 +105,10 @@ Inject content into predefined UI slots.
 api.slots.register({
   slots: {
     sidebar_footer: (props) => (
-      <div>Session: {props.session_id}</div>
+      <text>Session: {props.session_id}</text>
     ),
     home_bottom: () => (
-      <div>Custom widget here</div>
+      <box><text>Custom widget here</text></box>
     ),
   },
 })
@@ -215,9 +252,9 @@ api.lifecycle.onDispose(() => {
 ## Complete Example
 
 ```tsx
-import type { TuiPlugin } from "@mimo-ai/plugin/tui"
+import type { TuiPlugin, TuiPluginModule } from "@mimo-ai/plugin/tui"
 
-export const tui: TuiPlugin = async (api) => {
+const tui: TuiPlugin = async (api) => {
   // Register a command
   api.command.register(() => [
     {
@@ -237,8 +274,9 @@ export const tui: TuiPlugin = async (api) => {
   api.slots.register({
     slots: {
       sidebar_footer: (props) => {
-        const status = api.state.session.status(props.session_id)
-        return <div>{status ?? "idle"}</div>
+        const theme = () => api.theme.current
+        const status = () => api.state.session.status(props.session_id)
+        return <text fg={theme().textMuted}>{status() ?? "idle"}</text>
       },
     },
   })
@@ -248,11 +286,18 @@ export const tui: TuiPlugin = async (api) => {
     console.log("Plugin deactivated")
   })
 }
+
+const plugin: TuiPluginModule & { id: string } = {
+  id: "project-stats",
+  tui,
+}
+
+export default plugin
 ```
 
 ## Constraints
 
-- TUI plugins need a restart to take effect (they run in a separate thread from the server)
+- TUI plugins need a restart to take effect (scanned only at TUI startup)
 - Use `.tsx` extension for JSX support
-- Components use Solid.js JSX (NOT React) — no useState/useEffect, use signals
+- Components use Solid.js JSX with opentui terminal elements (`<box>`, `<text>`, `<span>`, `<b>`) — no React hooks, no HTML/CSS
 - Keep plugins lightweight — they run in the main rendering thread

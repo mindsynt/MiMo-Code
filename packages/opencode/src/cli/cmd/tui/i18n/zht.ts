@@ -240,6 +240,11 @@ export const dict = {
   "tui.command.never_ask.toast_on":
     "已開啟跳過提問 — 我不會再向你提問，會自行選擇最佳選項，直到你關閉（/never-ask）。權限請求仍需你確認。",
   "tui.command.never_ask.toast_off": "已關閉跳過提問 — 遇到決策點我會重新向你提問。",
+  "tui.command.skip_permissions.title_on": "跳過權限確認：已開啟（自動放行權限請求） - 點擊關閉",
+  "tui.command.skip_permissions.title_off": "跳過權限確認：已關閉 - 點擊開啟（自動放行權限請求）",
+  "tui.command.skip_permissions.toast_on":
+    "已開啟跳過權限確認 — 權限請求自動放行（含子代理）。破壞性命令仍會詢問，但 60 秒無回應會自動拒絕。",
+  "tui.command.skip_permissions.toast_off": "已關閉跳過權限確認 — 權限請求將重新需要你確認。",
   "tui.command.agent.cycle.title": "循環切換智慧代理",
   "tui.command.variant.cycle.title": "循環切換模型變體",
   "tui.command.variant.list.title": "切換模型變體",

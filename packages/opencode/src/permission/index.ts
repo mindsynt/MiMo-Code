@@ -22,6 +22,11 @@ import { TuiEvent } from "@/cli/cmd/tui/event"
 // after this bound rather than hanging — preserving the hang-safety the old
 // interactive:false gate guaranteed. Aligned with the actor registry stuck bound.
 const FORWARD_DENY_TIMEOUT_MS = 5 * 60 * 1000
+// In skip-all mode, forced-ask permissions (bash_delete etc.) still require a
+// human — but the human is likely away. Bounded wait, then auto-reject with
+// model-actionable feedback instead of hanging the unattended run.
+// Read lazily so tests (and unusual deployments) can override via env.
+const skipAllForcedAskTimeoutMs = () => Number(process.env.MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS) || 60 * 1000
 
 const log = Log.create({ service: "permission" })
 
@@ -150,6 +155,8 @@ export interface Interface {
   readonly ask: (input: AskInput, abortSignal?: AbortSignal) => Effect.Effect<void, Error>
   readonly reply: (input: ReplyInput) => Effect.Effect<void>
   readonly list: () => Effect.Effect<ReadonlyArray<Request>>
+  readonly skipAll: () => Effect.Effect<boolean>
+  readonly setSkipAll: (enabled: boolean) => Effect.Effect<void>
 }
 
 interface PendingEntry {
@@ -160,6 +167,10 @@ interface PendingEntry {
 interface State {
   pending: Map<PermissionID, PendingEntry>
   approved: Ruleset
+  // When true, any ask that would block for human approval is auto-allowed
+  // instead. Explicit "deny" rules still win (they return before this check).
+  // Runtime-only, instance-scoped: subagents in the same project inherit it.
+  skipAll: boolean
 }
 
 export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
@@ -189,6 +200,7 @@ export const layer = Layer.effect(
         const state = {
           pending: new Map<PermissionID, PendingEntry>(),
           approved: row?.data ?? [],
+          skipAll: false,
         }
 
         yield* Effect.addFinalizer(() =>
@@ -205,7 +217,8 @@ export const layer = Layer.effect(
     )
 
     const ask = Effect.fn("Permission.ask")(function* (input: AskInput, abortSignal?: AbortSignal) {
-      const { approved, pending } = yield* InstanceState.get(state)
+      const s = yield* InstanceState.get(state)
+      const { approved, pending } = s
       const { ruleset, ...request } = input
       let needsAsk = false
 
@@ -232,6 +245,15 @@ export const layer = Layer.effect(
         if (ruleAction === "allow") continue
         if (evaluate(request.permission, pattern, approved).action === "allow") continue
         needsAsk = true
+      }
+
+      // Runtime skip-all: auto-allow anything that would block for approval.
+      // Ordered AFTER the deny loop (explicit deny still wins) and EXCLUDES
+      // forced-ask permissions (bash_delete etc.) — same containment as a
+      // wildcard allow rule, which forced-ask is designed to resist.
+      if (needsAsk && s.skipAll && !forced) {
+        log.info("skip-all active, auto-allowing", { permission: request.permission, patterns: request.patterns })
+        return
       }
 
       // Non-interactive caller (system-spawned background agent): no human is
@@ -335,7 +357,7 @@ export const layer = Layer.effect(
       // A forwarded ask that no approver resolves must still terminate (deny),
       // never hang. Race the bounded timeout; the grant path above already
       // resolved the Deferred, so it wins instantly when pre-authorized.
-      const guarded = input.forward
+      let guarded = input.forward
         ? Effect.race(
             main,
             Effect.sleep(`${FORWARD_DENY_TIMEOUT_MS} millis`).pipe(
@@ -344,6 +366,36 @@ export const layer = Layer.effect(
             ),
           )
         : main
+
+      // Skip-all mode: the user opted into unattended execution, so a forced-ask
+      // (the only ask that still blocks here) must not hang the run forever.
+      // Bound it with a timeout; CorrectedError (not RejectedError) so the
+      // processor does NOT set ctx.blocked — the model sees an error result with
+      // actionable feedback and the session loop continues to the next step.
+      // NOTE: Effect.race with a permanently-blocked Deferred hangs under the
+      // current Effect v4 beta, so use Effect.timeoutOrElse instead.
+      if (s.skipAll && forced) {
+        const timeoutMs = skipAllForcedAskTimeoutMs()
+        guarded = Effect.timeoutOrElse(guarded, {
+          duration: `${timeoutMs} millis`,
+          orElse: () =>
+            bus
+              .publish(Event.Replied, {
+                sessionID: info.sessionID,
+                requestID: info.id,
+                reply: "reject",
+              })
+              .pipe(
+                Effect.andThen(() =>
+                  Effect.fail(
+                    new CorrectedError({
+                      feedback: `No user response within ${Math.round(timeoutMs / 1000)}s (skip-permissions mode is on, user likely away). This destructive action was auto-rejected as a safety measure — NOT an explicit user denial. Skip this operation and continue with the rest of the task; leave the cleanup/deletion for the user to do manually.`,
+                    }),
+                  ),
+                ),
+              ),
+        })
+      }
 
       return yield* Effect.ensuring(
         guarded,
@@ -423,7 +475,30 @@ export const layer = Layer.effect(
       return Array.from(pending.values(), (item) => item.info)
     })
 
-    return Service.of({ ask, reply, list })
+    const skipAll = Effect.fn("Permission.skipAll")(function* () {
+      return (yield* InstanceState.get(state)).skipAll
+    })
+
+    const setSkipAll = Effect.fn("Permission.setSkipAll")(function* (enabled: boolean) {
+      const s = yield* InstanceState.get(state)
+      s.skipAll = enabled
+      log.info("skip-all set", { enabled })
+      // Flush already-blocked asks so enabling mid-wait unblocks them (forced-ask
+      // pendings stay: they must always be answered by a human).
+      if (!enabled) return
+      for (const [id, item] of s.pending.entries()) {
+        if (FORCED_ASK.has(item.info.permission)) continue
+        s.pending.delete(id)
+        yield* bus.publish(Event.Replied, {
+          sessionID: item.info.sessionID,
+          requestID: item.info.id,
+          reply: "once",
+        })
+        yield* Deferred.succeed(item.deferred, undefined)
+      }
+    })
+
+    return Service.of({ ask, reply, list, skipAll, setSkipAll })
   }),
 )
 

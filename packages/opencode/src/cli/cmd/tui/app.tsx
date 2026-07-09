@@ -599,6 +599,24 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
+      title: local.skipPermissions.current()
+        ? t("tui.command.skip_permissions.title_on")
+        : t("tui.command.skip_permissions.title_off"),
+      value: "permission.skip_all.toggle",
+      category: "agent",
+      slash: {
+        name: "skip-permissions",
+      },
+      onSelect: () => {
+        const next = local.skipPermissions.toggle()
+        toast.show({
+          variant: next ? "warning" : "info",
+          message: next ? t("tui.command.skip_permissions.toast_on") : t("tui.command.skip_permissions.toast_off"),
+          duration: 5000,
+        })
+      },
+    },
+    {
       title: t("tui.command.mcp.list.title"),
       value: "mcp.list",
       category: "agent",

@@ -255,6 +255,11 @@ export const dict: Record<string, string> = {
   "tui.command.never_ask.toast_on":
     "Never-ask ON — I won't prompt you; I'll pick the best option myself until you turn it off (/never-ask). Permission requests still need your approval.",
   "tui.command.never_ask.toast_off": "Never-ask OFF — I'll ask you at decision points again.",
+  "tui.command.skip_permissions.title_on": "Skip-permissions: ON (auto-allow permission asks) — click to turn off",
+  "tui.command.skip_permissions.title_off": "Skip-permissions: OFF — click to turn on (auto-allow permission asks)",
+  "tui.command.skip_permissions.toast_on":
+    "Skip-permissions ON — asks auto-allowed (subagents too). Destructive commands still prompt but auto-reject after 60s if unanswered.",
+  "tui.command.skip_permissions.toast_off": "Skip-permissions OFF — asks need your approval again.",
   "tui.command.agent.cycle.title": "Agent cycle",
   "tui.command.variant.cycle.title": "Variant cycle",
   "tui.command.variant.list.title": "Switch model variant",

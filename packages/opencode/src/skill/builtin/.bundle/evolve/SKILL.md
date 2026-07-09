@@ -5,7 +5,7 @@ description: Use when you want to modify ANY aspect of yourself — your capabil
 
 # Evolve — Total Self-Modification
 
-Every layer of you is rewritable by writing files to `.mimocode/` — hot-reloaded next turn, no restart:
+Every layer of you is rewritable by writing files to `.mimocode/` (reload semantics differ per layer — see File Locations):
 
 - **What you can do** — create tools, or override any built-in (bash, read, edit, ...) with your own implementation
 - **How you behave** — hooks intercept everything: every tool call (block/rewrite args/rewrite output), every LLM request (system prompt, message list, temperature, headers), every session and subagent lifecycle event (cancel a run before it starts, gate a subagent's delivery and force it to redo work, inspect full trajectories after each step)
@@ -87,8 +87,8 @@ export default {
 
 | Event | Capability |
 |-------|-----------|
-| `tool.execute.before` | Modify args or `cancel=true` to block |
-| `tool.execute.after` | Modify tool output |
+| `tool.execute.before` | Modify `output.args` or set `output.cancel=true` to block |
+| `tool.execute.after` | Modify tool result via `output.output` (string), `output.title`, `output.metadata` — NOT `output.result` |
 | `tool.definition` | Modify tool description/parameters |
 | `chat.params` | Modify temperature, topP, maxOutputTokens |
 | `experimental.chat.system.transform` | Append to system prompt |
@@ -99,7 +99,9 @@ export default {
 | `permission.ask` | Auto-allow/deny permission requests (not yet wired) |
 | `shell.env` | Inject environment variables |
 
-Full list with input/output types: @reference/hook-api.md
+Field names must match exactly — a typo'd field (e.g. `output.result`) fails
+silently. Always check @reference/hook-api.md for the exact input/output shape
+before writing a hook.
 
 ## Creating Skills
 

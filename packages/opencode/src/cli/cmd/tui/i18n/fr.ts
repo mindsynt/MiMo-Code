@@ -319,6 +319,11 @@ export const dict = {
   "tui.command.never_ask.toast_on":
     "Sans questions ACTIVÉ — je ne te demanderai rien ; je choisirai moi-même la meilleure option jusqu'à ce que tu le désactives (/never-ask). Les demandes d'autorisation nécessitent toujours ton approbation.",
   "tui.command.never_ask.toast_off": "Sans questions DÉSACTIVÉ — je te redemanderai aux points de décision.",
+  "tui.command.skip_permissions.title_on": "Ignorer les autorisations : ACTIVÉ (auto-approuver les demandes) — cliquer pour désactiver",
+  "tui.command.skip_permissions.title_off": "Ignorer les autorisations : DÉSACTIVÉ — cliquer pour activer (auto-approuver les demandes)",
+  "tui.command.skip_permissions.toast_on":
+    "Ignorer les autorisations ACTIVÉ — demandes auto-approuvées (sous-agents inclus). Les commandes destructrices demandent encore, mais sont auto-rejetées après 60s sans réponse.",
+  "tui.command.skip_permissions.toast_off": "Ignorer les autorisations DÉSACTIVÉ — les demandes nécessitent à nouveau ton approbation.",
   "tui.command.agent.cycle.title": "Cycle d'agents",
   "tui.command.variant.cycle.title": "Cycle de variantes",
   "tui.command.variant.list.title": "Changer de variante de modèle",

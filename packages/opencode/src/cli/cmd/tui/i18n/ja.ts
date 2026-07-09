@@ -264,6 +264,11 @@ export const dict = {
   "tui.command.never_ask.toast_on":
     "質問しないをオンにしました — あなたに質問せず、オフにする（/never-ask）まで自分で最適な選択肢を選びます。権限リクエストは引き続きあなたの承認が必要です。",
   "tui.command.never_ask.toast_off": "質問しないをオフにしました — 判断ポイントで再びあなたに質問します。",
+  "tui.command.skip_permissions.title_on": "権限確認スキップ：オン（権限リクエストを自動許可） — クリックでオフに",
+  "tui.command.skip_permissions.title_off": "権限確認スキップ：オフ — クリックでオンに（権限リクエストを自動許可）",
+  "tui.command.skip_permissions.toast_on":
+    "権限確認スキップをオンにしました — 権限リクエストは自動許可（サブエージェント含む）。破壊的コマンドは確認しますが、60秒無応答で自動拒否します。",
+  "tui.command.skip_permissions.toast_off": "権限確認スキップをオフにしました — 権限リクエストは再びあなたの承認が必要です。",
   "tui.command.agent.cycle.title": "エージェントを循環",
   "tui.command.variant.cycle.title": "バリアントを循環",
   "tui.command.variant.list.title": "モデルバリアントを切り替え",
