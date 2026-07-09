@@ -1206,11 +1206,29 @@ export const layer: Layer.Layer<
       }
       lines.push("")
 
-      // Section 5: session checkpoint (full body, capped).
+      // Determine if indexed retrieval is likely meaningful. When memory files
+      // contain substantial content, it has been fed through the memory pipeline
+      // and is retrievable via FTS/graph — the full file dumps below are redundant.
+      const hasMemoryNarrative = memoryText.trim().length > 300
+      const hasNotes = notesText.trim().length > 200
+      const retrievalLikelyUseful = hasMemoryNarrative || hasNotes || checkpointText.trim().length > 1000
+
+      // Section 5: session checkpoint — trim to volatile sections when indexed
+      // memory exists, since §3-§11 content is retrievable via hybrid search.
       if (checkpointText.trim()) {
-        lines.push("## Session checkpoint")
-        lines.push(checkpointText.trim())
-        lines.push("")
+        if (retrievalLikelyUseful) {
+          // Keep only §1 Active intent and §2 Next action (per-turn, not indexed)
+          const kept = extractFirstTwoSections(checkpointText)
+          if (kept) {
+            lines.push("## Session checkpoint (abbreviated)")
+            lines.push(kept)
+            lines.push("")
+          }
+        } else {
+          lines.push("## Session checkpoint")
+          lines.push(checkpointText.trim())
+          lines.push("")
+        }
       }
 
       // Section 6: active actors ledger (one line per running actor).
@@ -1237,16 +1255,23 @@ export const layer: Layer.Layer<
         lines.push("")
       }
 
-      // Section 7: project memory (full body, capped, minus structured
-      // sections that are already covered by the graph in section 7.2).
-      // Dedup: strip ## Rules / Architecture decisions etc. so they
-      // don't appear both here and in the hybrid-retrieved section.
+      // Section 7: project memory narrative. When indexed content exists,
+      // the narrative is already in FTS — skip the full dump.
       if (memoryText.trim()) {
-        const deduped = stripStructuredSections(memoryText)
-        if (deduped.trim()) {
-          lines.push("## Project memory (narrative)")
-          lines.push(deduped.trim())
-          lines.push("")
+        if (retrievalLikelyUseful) {
+          const deduped = stripStructuredSections(memoryText)
+          if (deduped.trim()) {
+            lines.push("## Project memory (narrative)")
+            lines.push("> (content indexed in FTS — search via `memory-search` for specifics)")
+            lines.push("")
+          }
+        } else {
+          const deduped = stripStructuredSections(memoryText)
+          if (deduped.trim()) {
+            lines.push("## Project memory (narrative)")
+            lines.push(deduped.trim())
+            lines.push("")
+          }
         }
       }
 
@@ -1303,6 +1328,10 @@ export const layer: Layer.Layer<
 
       // Three-layer filter
       const items = filterMemory(memoryItems, { currentEntities, limit: 15 })
+      const hasRules = items.some((i) => i.type === "rule")
+      const hasChunks = items.some((i) => i.type === "chunk" || i.type === "entity")
+      const retrievalMeaningful = hasRules || hasChunks
+
       if (items.length > 0) {
         lines.push("## Retrieved memories (hybrid)")
         const ruleLines = items.filter((i) => i.type === "rule").map((r, i) => `${i + 1}. ${r.text}`)
@@ -1312,20 +1341,71 @@ export const layer: Layer.Layer<
         lines.push("")
       }
 
-      // Section 7.4: global memory (full body, capped). User-level cross-project
-      // preferences. Placed after project memory (more actionable) and before
-      // session notes (more volatile).
-      if (globalText.trim()) {
-        lines.push("## Global memory")
-        lines.push(globalText.trim())
-        lines.push("")
+      // P1-③: Search recent compaction summaries (trimmed when retrieval hit)
+      try {
+        const recentMsgs = MessageV2.page({ sessionID, limit: 50, agentID: "*" }).items
+        const compactionSummaries: string[] = []
+        for (const msg of recentMsgs) {
+          if (msg.info.role === "assistant" && (msg.info as Record<string, unknown>).summary === true) {
+            const text = (msg.parts as Array<Record<string, unknown>>)
+              .filter((p) => p.type === "text" && typeof p.text === "string")
+              .map((p) => p.text as string)
+              .join("\n")
+              .trim()
+            if (text && text.length > 100) compactionSummaries.push(text)
+            if (compactionSummaries.length >= 3) break
+          }
+        }
+        if (compactionSummaries.length > 0) {
+          if (retrievalMeaningful) {
+            // When retrieval already returned results, compaction summaries
+            // are redundant (their content is indexed). Just note existence.
+            lines.push("## Previous compaction summaries")
+            lines.push(
+              `> ${compactionSummaries.length} previous compaction(s) exist — content already indexed and retrievable via \`memory.search\`/FTS.`,
+            )
+            lines.push("")
+          } else {
+            lines.push("## Previous compaction summaries")
+            for (let i = 0; i < compactionSummaries.length; i++) {
+              lines.push(`### Summary #${compactionSummaries.length - i}`)
+              lines.push(compactionSummaries[i].slice(0, 1200))
+              lines.push("")
+            }
+          }
+        }
+      } catch {
+        /* best-effort */
       }
 
-      // F14 Section 7.5: session notes (full body, capped). Skip if empty.
+      // Section 7.4: global memory — skip when retrieval already hit (content is indexed)
+      if (globalText.trim()) {
+        if (retrievalMeaningful) {
+          lines.push("## Global memory")
+          lines.push(
+            "> (covered by hybrid retrieval above — content indexed in FTS/graph, search via `memory-search` for specifics)",
+          )
+          lines.push("")
+        } else {
+          lines.push("## Global memory")
+          lines.push(globalText.trim())
+          lines.push("")
+        }
+      }
+
+      // F14 Section 7.5: session notes — skip when retrieval already hit
       if (notesText.trim()) {
-        lines.push("## Session notes")
-        lines.push(notesText.trim())
-        lines.push("")
+        if (retrievalMeaningful) {
+          lines.push("## Session notes")
+          lines.push(
+            "> (covered by hybrid retrieval above — content indexed in FTS, search via `memory-search` for specifics)",
+          )
+          lines.push("")
+        } else {
+          lines.push("## Session notes")
+          lines.push(notesText.trim())
+          lines.push("")
+        }
       }
 
       // Section 8: memory keys index (paths only, omit already-pushed).
@@ -1646,6 +1726,40 @@ function extractEntityNames(text: string): string[] {
     names.add(m[1].split("/")[0])
   }
   return Array.from(names).slice(0, 8)
+}
+
+/**
+ * Extract only §1 Active intent and §2 Next action from a checkpoint file.
+ * These sections contain per-turn volatile state not captured by the
+ * memory pipeline (FTS/graph). Returns null when neither section has content.
+ */
+function extractFirstTwoSections(text: string): string | null {
+  const lines: string[] = []
+  let capturing = false
+  let sectionCount = 0
+  for (const line of text.split("\n")) {
+    const h = line.match(/^## §(\d+)/)
+    if (h) {
+      const num = parseInt(h[1], 10)
+      if (num <= 2) {
+        capturing = true
+        sectionCount++
+        lines.push(line)
+      } else if (capturing) {
+        // Stop at §3 or later
+        break
+      }
+    } else if (capturing) {
+      lines.push(line)
+    }
+  }
+  if (sectionCount === 0) return null
+  // Prune trailing (none) sections with no real content
+  const trimmed = lines
+    .join("\n")
+    .replace(/^## §[12][^\n]*\n\(none[^)]*\)\n*/gm, "")
+    .trim()
+  return trimmed || null
 }
 
 /** Remove structured sections (## Rules, ## Architecture decisions, etc.)

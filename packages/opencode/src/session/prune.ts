@@ -29,28 +29,58 @@ const DEFAULT_CACHE_TTL = 300_000
 const CHECKPOINT_RESERVED = 13_000
 const MAX_WRITER_FAILURES = 3
 
+// P2-⑤: Extraction density tracking for adaptive checkpoint thresholds.
+// Sliding window of recent pipeline extraction results (true = had entities).
+const DENSITY_WINDOW = 20
+const extractionResults: boolean[] = []
+
+export function recordExtraction(hadEntities: boolean) {
+  extractionResults.push(hadEntities)
+  if (extractionResults.length > DENSITY_WINDOW) extractionResults.shift()
+}
+
+function currentDensity(): number {
+  if (extractionResults.length === 0) return 0.5
+  return extractionResults.filter(Boolean).length / extractionResults.length
+}
+
 /**
- * Default checkpoint thresholds by context window size.
+ * Default checkpoint thresholds by context window size, optionally modulated
+ * by extraction density. When conversation produces many entities (high
+ * density), thresholds fire more frequently to capture knowledge before
+ * overflow triggers lossy compaction. Low density → fewer thresholds.
  *
- * Schedule (Part 2 density):
+ * Base schedule:
  *   < 25K          → []                    (subsystem disabled)
  *   25K ≤ w ≤ 200K → 4 triggers @ 20%      (mid-tier models)
  *   200K < w ≤ 500K → 9 triggers @ 10%     (extended-context models)
  *   w > 500K        → 18 triggers @ 5%     (1M+ window models)
  *
- * Density mirrors cc's intent that writers fire often enough that overflow
- * almost always finds a fresh `checkpoint.md` to rebuild from (avoiding
- * fallback to lossy compaction). cc uses growth+toolcall triggers; we use
- * % of window for a simpler implementation that doesn't require new state.
+ * Adaptive adjustment (when density ≥ 0.7 or ≤ 0.3):
+ *   High density: +1 extra threshold (shifted to earlier percentiles)
+ *   Low density:  -1 fewer threshold (shifted to later percentiles)
+ *   Neutral:      no change from base
+ *
  * See docs/superpowers/specs/2026-06-03-checkpoint-threshold-density-design.md.
  */
-export function defaultThresholdsFor(window: number): readonly string[] {
+export function defaultThresholdsFor(window: number, density?: number): readonly string[] {
   if (window < 25_000) return []
-  if (window <= 200_000) return ["20%", "40%", "60%", "80%"]
-  if (window <= 500_000) {
-    return ["10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%"]
+  const d = density ?? currentDensity()
+
+  if (window <= 200_000) {
+    const count = d >= 0.7 ? 5 : d <= 0.3 ? 3 : 4
+    if (count === 3) return ["25%", "50%", "75%"]
+    if (count === 5) return ["15%", "30%", "50%", "70%", "85%"]
+    return ["20%", "40%", "60%", "80%"]
   }
-  return Array.from({ length: 18 }, (_, i) => `${(i + 1) * 5}%`)
+  if (window <= 500_000) {
+    const base = 9
+    const count = d >= 0.7 ? Math.min(base + 2, 14) : d <= 0.3 ? Math.max(base - 2, 4) : base
+    return Array.from({ length: count }, (_, i) => `${Math.round(((i + 1) * 100) / count)}%`)
+  }
+  const base = 18
+  const count = d >= 0.7 ? Math.min(base + 4, 30) : d <= 0.3 ? Math.max(base - 4, 8) : base
+  return Array.from({ length: count }, (_, i) => `${Math.round(((i + 1) * 100) / count)}%`)
 }
 
 function isCacheCold(model?: Provider.Model, lastAssistantTime?: number): boolean {
@@ -323,6 +353,57 @@ export const layer: Layer.Layer<
             const result = yield* checkpoint.waitForWriter(input.sessionID)
             if (result === "success") {
               writerFailures.delete(input.sessionID)
+
+              // P1-④: Index checkpoint structured sections into memory pipeline
+              yield* Effect.promise(async () => {
+                const g = (await import("@/global")) as { Global: { Path: { data: string } } }
+                const cpFile = (await import("path")).join(
+                  g.Global.Path.data,
+                  "memory",
+                  "sessions",
+                  input.sessionID,
+                  "checkpoint.md",
+                )
+                const cpText = await Bun.file(cpFile)
+                  .text()
+                  .catch(() => "")
+                if (!cpText) return
+
+                // Parse knowledge-rich sections from checkpoint
+                const sections: string[] = []
+                const sectionRe = /^## (§\d+ [^\n]+)\n([\s\S]*?)(?=\n## |\n# |$)/gm
+                let m: RegExpExecArray | null
+                while ((m = sectionRe.exec(cpText)) !== null) {
+                  const title = m[1]
+                  const body = m[2].trim()
+                  if (body && !body.startsWith("(none") && !body.startsWith("_")) {
+                    const isKnowledgeSection =
+                      title.includes("§7 Discovered") ||
+                      title.includes("§8 Errors") ||
+                      title.includes("§10 Design") ||
+                      title.includes("§11 Open")
+                    if (isKnowledgeSection) sections.push(`## ${title}\n${body}`)
+                  }
+                }
+
+                if (sections.length > 0) {
+                  const mp = (await import("./memory-pipeline")) as { runMemoryPipeline: Function }
+                  if (mp.runMemoryPipeline) {
+                    await Promise.all(
+                      sections.map((text) =>
+                        mp
+                          .runMemoryPipeline({
+                            sessionID: input.sessionID,
+                            text,
+                            messageID: `checkpoint:${input.sessionID}`,
+                          })
+                          .catch(() => {}),
+                      ),
+                    )
+                  }
+                }
+              }).pipe(Effect.ignore, Effect.forkDetach)
+
               return
             }
             if (result !== "failure") return
@@ -377,6 +458,8 @@ export const layer: Layer.Layer<
                 }
               }
               if (!lastUserText) return Effect.void
+              // P2-⑤: Estimate extraction density from user text length
+              recordExtraction(lastUserText.length > 200)
               return Effect.promise(() =>
                 mod.runMemoryPipeline!({
                   sessionID: input.sessionID,
@@ -477,6 +560,26 @@ export const layer: Layer.Layer<
         }
         log.info("soft-trimmed", { count: toPrune.length })
       } else {
+        // P0-②: Extract knowledge before hard-clearing tool outputs
+        if (toPrune.length > 0) {
+          yield* Effect.promise(async () => {
+            const mod = (await import("./memory-pipeline")) as { runMemoryPipeline: Function }
+            if (!mod.runMemoryPipeline) return
+            await Promise.all(
+              toPrune.slice(0, 20).map((part) => {
+                if (part.state.status !== "completed") return Promise.resolve()
+                return mod
+                  .runMemoryPipeline({
+                    sessionID: input.sessionID,
+                    text: part.state.output.slice(0, 4096),
+                    messageID: part.id,
+                  })
+                  .catch(() => {})
+              }),
+            )
+          }).pipe(Effect.ignore, Effect.forkDetach)
+        }
+
         if (pruned > PRUNE_MINIMUM) {
           for (const part of toPrune) {
             if (part.state.status === "completed") {

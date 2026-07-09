@@ -179,10 +179,7 @@ export const layer: Layer.Layer<
     // calls, then erases output of older tool calls to free context space.
     // Scoped to (sessionID, agentID): only inspects messages belonging to the
     // given actor — main-agent messages stay untouched when agentID is set.
-    const prune = Effect.fn("SessionCompaction.prune")(function* (input: {
-      sessionID: SessionID
-      agentID?: string
-    }) {
+    const prune = Effect.fn("SessionCompaction.prune")(function* (input: { sessionID: SessionID; agentID?: string }) {
       const cfg = yield* config.get()
       if (!cfg.compaction?.prune) return
       log.info("pruning", { agentID: input.agentID ?? "main" })
@@ -311,7 +308,29 @@ export const layer: Layer.Layer<
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
 ---`
 
-      const prompt = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
+      // P2-⑥: Progressive compaction — incorporate previous summary
+      const prevSummary = [...history]
+        .reverse()
+        .find((m) => m.info.role === "assistant" && (m.info as Record<string, unknown>).summary === true)
+      let basePrompt = defaultPrompt
+      if (prevSummary) {
+        const prevText = (prevSummary.parts as Array<Record<string, unknown>>)
+          .filter((p) => p.type === "text" && typeof p.text === "string")
+          .map((p) => p.text as string)
+          .join("\n")
+          .trim()
+        if (prevText) {
+          basePrompt = [
+            "Previous summary of this conversation:",
+            prevText,
+            "---",
+            defaultPrompt,
+            "Update the above summary with the NEW context below. Incorporate new information while keeping relevant information from the previous summary.",
+          ].join("\n\n")
+        }
+      }
+
+      const prompt = compacting.prompt ?? [basePrompt, ...compacting.context].join("\n\n")
       const msgs = structuredClone(selected.head)
       yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, { stripMedia: true })
@@ -470,6 +489,26 @@ export const layer: Layer.Layer<
       }
 
       if (processor.message.error) return "stop"
+
+      // P0-①: Feed compaction summary into memory pipeline (non-blocking)
+      const allParts = MessageV2.parts(processor.message.id)
+      let summaryText = ""
+      for (const p of allParts) {
+        if (p.type === "text" && "text" in p) summaryText += (p as { text: string }).text + "\n"
+      }
+      summaryText = summaryText.trim()
+      if (summaryText) {
+        yield* Effect.promise(() =>
+          import("./memory-pipeline").then((m) =>
+            (m as { runMemoryPipeline: Function }).runMemoryPipeline({
+              sessionID: input.sessionID,
+              text: summaryText,
+              messageID: processor.message.id,
+            }),
+          ),
+        ).pipe(Effect.ignore, Effect.forkDetach)
+      }
+
       if (result === "continue")
         yield* bus.publish(Event.Compacted, {
           sessionID: input.sessionID,
