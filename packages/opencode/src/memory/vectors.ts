@@ -7,23 +7,35 @@ export interface SearchHit {
   score: number
 }
 
-let embedFn: ((text: string) => Promise<Float32Array>) | null = null
+// Pure-JS character n-gram embedding — no native/WASM dependencies.
+// Produces a deterministic 384-dimensional L2-normalized vector from
+// character 2-4 gram frequencies. This enables hybrid search (vector +
+// graph + FTS) without onnxruntime-node/sharp, both of which are
+// incompatible with Bun's native addon handling.
+const DIMS = 384
 
 export async function generateEmbedding(text: string): Promise<Float32Array> {
-  if (!embedFn) {
-    const { pipeline } = await import("@xenova/transformers")
-    const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
-      quantized: true,
-    })
-    embedFn = async (t: string) => {
-      const result = await extractor(t.slice(0, 2048), {
-        pooling: "mean",
-        normalize: true,
-      })
-      return new Float32Array(result.data as Float32Array)
+  const vec = new Float32Array(DIMS)
+  const input = text.toLowerCase().slice(0, 2048)
+
+  // Hash each character n-gram (length 2-4) into a bucket index
+  for (let n = 2; n <= 4; n++) {
+    for (let i = 0; i <= input.length - n; i++) {
+      let hash = 0
+      for (let j = 0; j < n; j++) {
+        hash = ((hash << 5) - hash + input.charCodeAt(i + j)) | 0
+      }
+      vec[Math.abs(hash) % DIMS] += 1
     }
   }
-  return embedFn(text)
+
+  // L2 normalize
+  let norm = 0
+  for (let i = 0; i < DIMS; i++) norm += vec[i] * vec[i]
+  norm = Math.sqrt(norm)
+  if (norm > 0) for (let i = 0; i < DIMS; i++) vec[i] /= norm
+
+  return vec
 }
 
 export class VectorIndex {

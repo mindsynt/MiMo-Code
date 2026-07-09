@@ -97,6 +97,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.933.0",
+    "@img/sharp-darwin-x64": "0.35.3",
     "@mimo-ai/plugin": "workspace:*",
     "@mimo-ai/script": "workspace:*",
     "@mimo-ai/sdk": "workspace:*",

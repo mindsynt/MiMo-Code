@@ -20,9 +20,7 @@ const ADD_MODEL_SENTINEL = "__add_model__"
 
 export function useConnected() {
   const sync = useSync()
-  return createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
+  return createMemo(() => sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).length > 0))
 }
 
 export function DialogModel(props: { providerID?: string }) {
@@ -110,7 +108,10 @@ export function DialogModel(props: { providerID?: string }) {
     const pinnedOptions = showPinned
       ? [
           // mimo-free model
-          ...(mimoProvider && "mimo-auto" in mimoProvider.models && mimoProvider.models["mimo-auto"].status !== "deprecated" && (!showSections || !inShortcuts("mimo", "mimo-auto"))
+          ...(mimoProvider &&
+          "mimo-auto" in mimoProvider.models &&
+          mimoProvider.models["mimo-auto"].status !== "deprecated" &&
+          (!showSections || !inShortcuts("mimo", "mimo-auto"))
             ? [
                 {
                   value: { providerID: "mimo", modelID: "mimo-auto" },

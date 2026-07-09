@@ -65,6 +65,19 @@ export function queryEntity(name: string) {
   return Database.use((db) => db.select().from(EntityTable).where(eq(EntityTable.name, name)).get())
 }
 
+/** Case-insensitive variant — first tries exact match, then LOWER(). */
+export function queryEntityCI(name: string) {
+  const exact = queryEntity(name)
+  if (exact) return exact
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EntityTable)
+      .where(sql`LOWER(${EntityTable.name}) = LOWER(${name})`)
+      .get(),
+  ) as typeof EntityTable.$inferSelect | undefined
+}
+
 export function upsertRelation(input: { source: string; target: string; type: string; weight?: number }) {
   let sourceEntity = Database.use((db) => db.select().from(EntityTable).where(eq(EntityTable.name, input.source)).get())
   if (!sourceEntity) {

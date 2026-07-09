@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import z from "zod"
-import { traverseGraph, queryEntity } from "@/memory/entities"
+import { traverseGraph, queryEntity, queryEntityCI } from "@/memory/entities"
 import DESCRIPTION from "./memory-graph.txt"
 import * as Tool from "./tool"
 
@@ -13,16 +13,16 @@ export const parameters = z.object({
 })
 
 export function traverse(from: string, relation?: string, depth = 2) {
-  const fromEntity = queryEntity(from)
+  const fromEntity = queryEntityCI(from)
   if (!fromEntity) {
     return {
       title: `Memory graph: entity not found`,
-      output: `Entity "${from}" was not found in the memory graph.`,
+      output: `Entity "${from}" was not found in the memory graph. Entity names are matched case-insensitively. Try the \`memory\` tool to search by text.`,
       metadata: { entity_found: false },
     }
   }
 
-  const paths = traverseGraph(from, { relation, depth })
+  const paths = traverseGraph(fromEntity.name, { relation, depth })
 
   if (paths.length === 0) {
     return {
@@ -64,7 +64,7 @@ export function subgraph(entities: string[]) {
   const notFound: string[] = []
 
   for (const name of entities) {
-    const entity = queryEntity(name)
+    const entity = queryEntityCI(name)
     if (entity) {
       found.push(entity)
     } else {

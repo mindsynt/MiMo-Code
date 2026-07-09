@@ -18,5 +18,8 @@ Two operations:
 Each entity carries: name, type (function/api/config/concept/user_pref/file),
 tier (persistent/short_term), and confidence (0.0–1.0).
 
+Entity names are matched case-insensitively. Use the canonical name
+(preserving original casing) from the output for subsequent queries.
+
 For general memory text search, use the `memory` tool instead.
 For combined search across text, graph, and semantics, use `memory-search`.
