@@ -1036,6 +1036,29 @@ export function MessageTimeline(props: {
                       ),
                   })
                   const commentCount = createMemo(() => comments().length)
+
+                  // 模型切换检测：比较当前消息和前一条消息的模型
+                  const modelChanged = createMemo(() => {
+                    const msg = sync.data.message[sessionID() ?? ""]
+                    if (!msg) return undefined
+                    const current = msg.find((m) => m.id === messageID)
+                    if (!current || !("model" in current)) return undefined
+                    const currentModel = (current as UserMessage).model
+                    const renderedIDs = rendered()
+                    const idx = renderedIDs.indexOf(messageID)
+                    if (idx <= 0) return undefined
+                    const prevID = renderedIDs[idx - 1]
+                    const prev = msg.find((m) => m.id === prevID)
+                    if (!prev || !("model" in prev)) return undefined
+                    const prevModel = (prev as UserMessage).model
+                    if (currentModel.modelID === prevModel.modelID && currentModel.providerID === prevModel.providerID) return undefined
+                    // 拼接模型名称
+                    const name = currentModel.modelID
+                    const fullName = currentModel.providerID ? `${currentModel.providerID}/${currentModel.modelID}` : name
+                    // 检查 variant
+                    const variant = (current as { variant?: string }).variant
+                    return variant ? `${fullName} (${variant})` : fullName
+                  })
                   return (
                     <div
                       id={props.anchor(messageID)}
@@ -1088,6 +1111,15 @@ export function MessageTimeline(props: {
                             </div>
                           </div>
                         </div>
+                      </Show>
+                      <Show when={modelChanged()}>
+                        {(label) => (
+                          <div class="flex items-center gap-3 px-4 md:px-5 py-2 select-none">
+                            <div class="flex-1 h-px bg-border-weak-base" />
+                            <span class="text-12-regular text-text-weak shrink-0 whitespace-nowrap">{label()}</span>
+                            <div class="flex-1 h-px bg-border-weak-base" />
+                          </div>
+                        )}
                       </Show>
                       <SessionTurn
                         sessionID={sessionID() ?? ""}
