@@ -596,6 +596,7 @@ export const layer = Layer.effect(
     const loadGlobal = Effect.fnUntraced(function* () {
       let result: Info = pipe(
         {},
+        mergeDeep(yield* loadFile(path.join(Global.Path.config, "opencode.json"))),
         mergeDeep(yield* loadFile(path.join(Global.Path.config, "config.json"))),
         mergeDeep(yield* loadFile(path.join(Global.Path.config, "mimocode.json"))),
         mergeDeep(yield* loadFile(path.join(Global.Path.config, "mimocode.jsonc"))),
@@ -813,7 +814,7 @@ export const layer = Layer.effect(
 
         for (const dir of directories) {
           if (dir.endsWith(".mimocode") || dir === Flag.MIMOCODE_CONFIG_DIR) {
-            for (const file of ["mimocode.json", "mimocode.jsonc"]) {
+            for (const file of ["opencode.json", "opencode.jsonc", "mimocode.json", "mimocode.jsonc"]) {
               const source = path.join(dir, file)
               log.debug(`loading config from ${source}`)
               yield* merge(source, yield* loadFile(source))
