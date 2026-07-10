@@ -341,7 +341,7 @@ export async function bootstrapDirectory(input: {
       () => Promise.resolve(input.loadSessions(input.directory)),
       () =>
         retry(() =>
-          input.sdk.mcp.status().then((x) => {
+          input.sdk.mcp.status({ directory: input.directory }).then((x) => {
             input.setStore("mcp", x.data!)
             input.setStore("mcp_ready", true)
           }),

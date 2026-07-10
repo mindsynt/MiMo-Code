@@ -175,7 +175,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
     if (!sync.data.mcp_ready && !load.mcpLoading) {
       setLoad("mcpLoading", true)
       void sdk.client.mcp
-        .status()
+        .status({ directory: sdk.directory })
         .then((result) => {
           sync.set("mcp", result.data ?? {})
           sync.set("mcp_ready", true)
@@ -191,7 +191,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
     if (!sync.data.lsp_ready && !load.lspLoading) {
       setLoad("lspLoading", true)
       void sdk.client.lsp
-        .status()
+        .status({ directory: sdk.directory })
         .then((result) => {
           sync.set("lsp", result.data ?? [])
           sync.set("lsp_ready", true)
