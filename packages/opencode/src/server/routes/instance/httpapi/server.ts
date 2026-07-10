@@ -103,7 +103,9 @@ const instance = HttpRouter.middleware()(
 
         if (!Flag.MIMOCODE_SERVER_PASSWORD) {
           const cwd = Filesystem.resolve(process.cwd())
-          if (!Filesystem.contains(cwd, directory)) {
+          const childWithinParent = Filesystem.contains(cwd, directory)
+          const parentWithinChild = Filesystem.contains(directory, cwd)
+          if (!childWithinParent && !parentWithinChild) {
             return yield* new DirectoryAccessDenied({
               message: "Access denied: directory must be within the server's working directory",
             })

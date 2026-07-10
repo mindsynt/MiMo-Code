@@ -33,6 +33,7 @@ import { Persist, persisted } from "@/utils/persist"
 import { usePermission } from "@/context/permission"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
+import { useVoice } from "@/context/voice"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
@@ -53,6 +54,7 @@ import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
+import { VoiceButton } from "@/components/voice/voice-button"
 import { ImagePreview } from "@mimo-ai/ui/image-preview"
 import { useQueries, useQuery } from "@tanstack/solid-query"
 import { loadAgentsQuery, loadProvidersQuery } from "@/context/global-sync/bootstrap"
@@ -114,6 +116,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const command = useCommand()
   const permission = usePermission()
   const language = useLanguage()
+  const voice = useVoice()
   const platform = usePlatform()
   const { params, tabs, view } = useSessionLayout()
   let editorRef!: HTMLDivElement
@@ -1103,6 +1106,77 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSubmit: props.onSubmit,
   })
 
+  // ── Voice 三段式处理（参照 TUI 的 segment → process → commit 流水线） ──
+  //
+  // Phase 1 — 段到达：VAD / SpeechRecognition 完成一个识别段
+  // Phase 2 — 段处理：转写 / 语音控制
+  // Phase 3 — 段提交：追加文本 / 发送 / 切换 Agent
+  //
+  createEffect(() => {
+    voice.setOnCommand?.((cmd) => {
+      switch (cmd) {
+        case "send":
+          handleSubmit(new Event("submit"))
+          break
+        case "clear":
+          prompt.reset()
+          clearEditor()
+          break
+        case "new":
+          command.trigger("session.new")
+          break
+        case "undo":
+          command.trigger("session.undo")
+          break
+        case "redo":
+          command.trigger("session.redo")
+          break
+      }
+    })
+    voice.setOnSend?.(() => {
+      handleSubmit(new Event("submit"))
+    })
+
+    // Phase 1+2+3: 每个语音段实时提交到编辑器（TUI 三段式模式）
+    const liveHandler = (text: string) => {
+      commitVoiceSegment(text)
+    }
+    voice.setOnLiveTranscript?.(liveHandler)
+
+    // 组件卸载或 HMR 更新时清理回调，避免 HMR 时旧回调堆积
+    onCleanup(() => {
+      voice.setOnCommand?.(undefined)
+      voice.setOnSend?.(undefined)
+      voice.setOnLiveTranscript?.(undefined)
+    })
+  })
+
+  /** 将语音段结果提交到编辑器光标位置（TUI av.appendText 的等价实现） */
+  function commitVoiceSegment(text: string) {
+    if (!editorRef || !text) return // guard against undefined/empty text
+    liveTranscriptActive = true
+    const sel = window.getSelection()
+    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : undefined
+    if (range && editorRef.contains(range.commonAncestorContainer)) {
+      range.deleteContents()
+      range.insertNode(document.createTextNode(text + " "))
+      range.collapse(false)
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    } else {
+      editorRef.appendChild(document.createTextNode(text + " "))
+    }
+    // 直接调用 handleInput 同步 prompt 状态，而非 dispatchEvent
+    // 避免触发 InputEvent → handleInput → prompt.set → reconcile → renderEditorWithCursor 的闭环
+    handleInput()
+    editorRef.focus()
+    scrollCursorIntoView()
+  }
+
+  // 标记当前语音会话期间是否有实时段已提交
+  // 用于 onTranscript 停止时去重，避免同一段文本重复提交
+  let liveTranscriptActive = false
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
@@ -1420,6 +1494,32 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
 
             <div class="flex items-center gap-1 pointer-events-auto">
+              <VoiceButton
+                onTranscript={(text) => {
+                  // 如果实时段已逐句插入，停止时不再重复插入完整文本
+                  if (liveTranscriptActive) {
+                    liveTranscriptActive = false
+                    return
+                  }
+                  if (!editorRef) return
+                  // Use execCommand for cursor-aware insertion (works in all browsers for contenteditable)
+                  const sel = window.getSelection()
+                  const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : undefined
+                  if (range && editorRef.contains(range.commonAncestorContainer)) {
+                    range.deleteContents()
+                    range.insertNode(document.createTextNode(text))
+                    range.collapse(false)
+                    sel?.removeAllRanges()
+                    sel?.addRange(range)
+                  } else {
+                    // If cursor is not in editor, append at end
+                    editorRef.appendChild(document.createTextNode(text))
+                  }
+                  editorRef.dispatchEvent(new InputEvent("input", { bubbles: true }))
+                  editorRef.focus()
+                }}
+                t={(key) => language.t(key as Parameters<typeof language.t>[0])}
+              />
               <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
                 <IconButton
                   data-action="prompt-submit"

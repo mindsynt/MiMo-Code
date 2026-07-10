@@ -930,4 +930,8 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Kunne ikke opprette vedvarende prosjektikon",
   "error.childStore.storeCreateFailed": "Kunne ikke opprette lager",
   "terminal.connectionLost.abnormalClose": "WebSocket lukket unormalt: {{code}}",
+
+  "featureCenter.title": "Feature Center",
+  "featureCenter.voice": "Voice Input",
+  "featureCenter.voice.description": "Speech-to-text input via microphone",
 } satisfies Partial<Record<Keys, string>>

@@ -865,4 +865,8 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Dauerhaftes Projekticon konnte nicht erstellt werden",
   "error.childStore.storeCreateFailed": "Speicher konnte nicht erstellt werden",
   "terminal.connectionLost.abnormalClose": "WebSocket abnormal geschlossen: {{code}}",
+
+  "featureCenter.title": "Feature Center",
+  "featureCenter.voice": "Voice Input",
+  "featureCenter.voice.description": "Speech-to-text input via microphone",
 } satisfies Partial<Record<Keys, string>>

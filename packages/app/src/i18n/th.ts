@@ -919,4 +919,8 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "ไม่สามารถสร้างไอคอนโปรเจกต์ถาวร",
   "error.childStore.storeCreateFailed": "ไม่สามารถสร้างที่เก็บ",
   "terminal.connectionLost.abnormalClose": "WebSocket ปิดอย่างผิดปกติ: {{code}}",
+
+  "featureCenter.title": "Feature Center",
+  "featureCenter.voice": "Voice Input",
+  "featureCenter.voice.description": "Speech-to-text input via microphone",
 }

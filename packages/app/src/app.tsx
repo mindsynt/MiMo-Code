@@ -19,6 +19,7 @@ import {
   ErrorBoundary,
   For,
   type JSX,
+  createEffect,
   lazy,
   onCleanup,
   type ParentProps,
@@ -41,6 +42,8 @@ import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
+import { VoiceProvider, useVoice } from "@/context/voice"
+import { useGlobalSync } from "@/context/global-sync"
 import DirectoryLayout from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
@@ -95,7 +98,10 @@ function AppShellProviders(props: ParentProps) {
             <ModelsProvider>
               <CommandProvider>
                 <HighlightsProvider>
-                  <Layout>{props.children}</Layout>
+                  <VoiceProvider>
+                    <VoiceAsrSetup />
+                    <Layout>{props.children}</Layout>
+                  </VoiceProvider>
                 </HighlightsProvider>
               </CommandProvider>
             </ModelsProvider>
@@ -104,6 +110,24 @@ function AppShellProviders(props: ParentProps) {
       </PermissionProvider>
     </SettingsProvider>
   )
+}
+
+// Reads Xiaomi provider config and sets ASR credentials for MediaRecorder voice input
+function VoiceAsrSetup() {
+  const voice = useVoice()
+  const sync = useGlobalSync()
+  createEffect(() => {
+    const providers =
+      (
+        sync.data.provider as
+          { all?: Array<{ id: string; key?: string; options?: Record<string, unknown> }> } | undefined
+      )?.all ?? []
+    const xiaomi = providers.find((p) => p.id === "xiaomi")
+    if (xiaomi?.key) {
+      voice.setAsrCredentials({ apiKey: xiaomi.key, baseUrl: (xiaomi.options?.baseURL as string) || undefined })
+    }
+  })
+  return null
 }
 
 function SessionProviders(props: ParentProps) {
