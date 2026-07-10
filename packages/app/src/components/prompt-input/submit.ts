@@ -562,19 +562,26 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       messageID,
       optimisticBusy: sessionDirectory === projectDirectory,
       before: waitForWorktree,
-    }).catch((err) => {
-      pending.delete(session.id)
-      if (sessionDirectory === projectDirectory) {
-        sync.set("session_status", session.id, { type: "idle" })
-      }
-      showToast({
-        title: language.t("prompt.toast.promptSendFailed.title"),
-        description: errorMessage(err),
-      })
-      removeOptimisticMessage()
-      restoreCommentItems(commentItems)
-      restoreInput()
     })
+      .then(() => {
+        // 请求完成后重置状态为 idle（防止事件流断开导致前端状态卡在 busy）
+        if (sessionDirectory === projectDirectory) {
+          sync.set("session_status", session.id, { type: "idle" })
+        }
+      })
+      .catch((err) => {
+        pending.delete(session.id)
+        if (sessionDirectory === projectDirectory) {
+          sync.set("session_status", session.id, { type: "idle" })
+        }
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: errorMessage(err),
+        })
+        removeOptimisticMessage()
+        restoreCommentItems(commentItems)
+        restoreInput()
+      })
   }
 
   return {
