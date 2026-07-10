@@ -1445,12 +1445,55 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
   )
   const text = () => part().text.trim()
+  const [expanded, setExpanded] = createSignal(false)
+
+  const previewText = createMemo(() => {
+    const t = text()
+    if (!t) return ""
+    // 显示前 2 行或前 150 个字符的预览
+    const lines = t.split("\n")
+    const previewLine = lines[0]
+    const preview = previewLine.length > 150 ? previewLine.slice(0, 150) + "…" : previewLine
+    if (lines.length > 1 || previewLine.length > 150) return preview + "…"
+    if (previewLine.length > 80) return preview
+    if (lines.length > 1) return lines[0] + "…"
+    return preview
+  })
+
+  const hasMore = createMemo(() => {
+    const t = text()
+    const p = previewText()
+    return t.length > p.replace("…", "").length
+  })
+
+  const toggle = () => setExpanded((v) => !v)
 
   return (
     <Show when={text()}>
       <div data-component="reasoning-part">
-        <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
-          <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+        <button
+          type="button"
+          onClick={toggle}
+          class="w-full flex items-center gap-2 px-3 py-1.5 text-13-regular text-text-weak bg-surface-base hover:bg-surface-base-hover rounded-lg transition-colors cursor-pointer border-0 text-left"
+          classList={{
+            "rounded-b-none": expanded(),
+          }}
+        >
+          <span>💭</span>
+          <Show when={!expanded() || !hasMore()}>
+            <span class="truncate flex-1">{previewText()}</span>
+          </Show>
+          <Show when={expanded()}>
+            <span class="truncate flex-1">{part().text.trim().split("\n")[0]}</span>
+          </Show>
+          <Icon name="chevron-down" size="small" class="shrink-0 transition-transform" classList={{ "rotate-180": expanded() }} />
+        </button>
+        <Show when={expanded()}>
+          <div class="px-3 pb-2 bg-surface-base rounded-b-lg">
+            <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
+              <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+            </Show>
+          </div>
         </Show>
       </div>
     </Show>
