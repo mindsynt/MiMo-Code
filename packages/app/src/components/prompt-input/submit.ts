@@ -237,11 +237,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       queued.abort.abort()
       queued.cleanup()
       pending.delete(sessionID)
+      sync.set("session_status", sessionID, { type: "idle" })
       return Promise.resolve()
     }
     return sdk.client.session
       .abort({
         sessionID,
+      })
+      .then(() => {
+        sync.set("session_status", sessionID, { type: "idle" })
       })
       .catch(() => {})
   }
