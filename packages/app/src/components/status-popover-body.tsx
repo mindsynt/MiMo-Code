@@ -234,15 +234,14 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "mimocode.json"))
 
   return (
-    <div class="w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
-      <Tabs
-        aria-label={language.t("status.popover.ariaLabel")}
-        class="tabs bg-background-strong rounded-xl overflow-hidden"
-        data-component="tabs"
-        data-active="servers"
-        defaultValue="servers"
-        variant="alt"
-      >
+    <Tabs
+      aria-label={language.t("status.popover.ariaLabel")}
+      class="tabs bg-background-strong rounded-xl overflow-hidden"
+      data-component="tabs"
+      data-active="servers"
+      defaultValue="servers"
+      variant="alt"
+    >
         <Tabs.List data-slot="tablist" class="bg-transparent border-b-0 px-4 pt-2 pb-0 gap-4 h-10">
           <Tabs.Trigger value="servers" data-slot="tab" class="text-12-regular">
             {sortedServers().length > 0 ? `${sortedServers().length} ` : ""}
@@ -428,6 +427,5 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           </div>
         </Tabs.Content>
       </Tabs>
-    </div>
   )
 }
