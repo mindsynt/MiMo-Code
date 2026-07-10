@@ -842,7 +842,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "فشل إنشاء المخزن",
   "terminal.connectionLost.abnormalClose": "تم إغلاق WebSocket بشكل غير طبيعي: {{code}}",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
 }

@@ -843,7 +843,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "저장소 생성 실패",
   "terminal.connectionLost.abnormalClose": "WebSocket이 비정상적으로 닫힘: {{code}}",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
 }

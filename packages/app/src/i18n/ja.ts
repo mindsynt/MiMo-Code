@@ -848,7 +848,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "ストアの作成に失敗しました",
   "terminal.connectionLost.abnormalClose": "WebSocket が異常終了しました: {{code}}",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
 }

@@ -937,7 +937,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "Error al crear almacén",
   "terminal.connectionLost.abnormalClose": "WebSocket cerrado anormalmente: {{code}}",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
 }

@@ -88,8 +88,6 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
-import { FeatureCenterPanel } from "./layout/feature-center"
-import { FeatureCenterButton } from "./layout/feature-center-button"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -129,7 +127,6 @@ export default function Layout(props: ParentProps) {
   const command = useCommand()
   const theme = useTheme()
   const language = useLanguage()
-  const [showFeatures, setShowFeatures] = createSignal(false)
   const initialDirectory = decode64(params.dir)
   const location = useLocation()
   const route = createMemo(() => {
@@ -2354,15 +2351,10 @@ export default function Layout(props: ParentProps) {
       settingsLabel={() => language.t("sidebar.settings")}
       settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}
-      featureCenterLabel={() => language.t("featureCenter.title")}
-      featureCenterActive={showFeatures}
-      onToggleFeatureCenter={() => setShowFeatures((v) => !v)}
       helpLabel={() => language.t("sidebar.help")}
       onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
       renderPanel={() =>
-        showFeatures() ? (
-          <FeatureCenterPanel />
-        ) : mobile ? (
+        mobile ? (
           <SidebarPanel project={currentProject} mobile />
         ) : (
           <SidebarPanel project={currentProject} merged />

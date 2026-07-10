@@ -912,7 +912,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "建立儲存區失敗",
   "terminal.connectionLost.abnormalClose": "WebSocket 異常關閉：{{code}}",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
 } satisfies Partial<Record<Keys, string>>

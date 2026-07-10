@@ -28,9 +28,6 @@ export const SidebarContent = (props: {
   settingsLabel: Accessor<string>
   settingsKeybind: Accessor<string | undefined>
   onOpenSettings: () => void
-  featureCenterLabel: Accessor<string>
-  featureCenterActive: Accessor<boolean>
-  onToggleFeatureCenter: () => void
   helpLabel: Accessor<string>
   onOpenHelp: () => void
   renderPanel: () => JSX.Element
@@ -102,15 +99,6 @@ export const SidebarContent = (props: {
               aria-label={props.settingsLabel()}
             />
           </TooltipKeybind>
-          <Tooltip placement={placement()} value={props.featureCenterLabel()}>
-            <IconButton
-              icon="bolt"
-              variant={props.featureCenterActive() ? "primary" : "ghost"}
-              size="large"
-              onClick={props.onToggleFeatureCenter}
-              aria-label={props.featureCenterLabel()}
-            />
-          </Tooltip>
           <Tooltip placement={placement()} value={props.helpLabel()}>
             <IconButton
               icon="help"

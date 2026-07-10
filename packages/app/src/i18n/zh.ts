@@ -933,10 +933,4 @@ export const dict = {
   "error.childStore.storeCreateFailed": "创建存储失败",
   "terminal.connectionLost.abnormalClose": "WebSocket 异常关闭：{{code}}",
 
-  "featureCenter.title": "功能中心",
-  "featureCenter.voice": "语音输入",
-  "featureCenter.voice.description": "通过麦克风进行语音转文字输入",
-  "featureCenter.plugins": "插件管理",
-  "featureCenter.plugins.description": "管理已安装的插件",
-  "plugins.install": "安装",
 } satisfies Partial<Record<Keys, string>>

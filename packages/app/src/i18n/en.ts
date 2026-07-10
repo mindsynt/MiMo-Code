@@ -967,10 +967,4 @@ export const dict = {
   "workspace.reset.archived.many": "{{count}} sessions will be archived.",
   "workspace.reset.note": "This will reset the workspace to match the default branch.",
 
-  "featureCenter.title": "Feature Center",
-  "featureCenter.voice": "Voice Input",
-  "featureCenter.voice.description": "Speech-to-text input via microphone",
-  "featureCenter.plugins": "Plugins",
-  "featureCenter.plugins.description": "Manage installed plugins",
-  "plugins.install": "Install",
 }
