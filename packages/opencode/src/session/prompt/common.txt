@@ -1,0 +1,45 @@
+# 通用规约
+
+以下规约适用于所有工具和所有操作场景。
+
+## Git 安全协议
+
+- NEVER update the git config
+- NEVER run destructive/irreversible git commands (like push --force, hard reset, etc) unless the user explicitly requests them
+- NEVER skip hooks (--no-verify, --no-gpg-sign, etc) unless the user explicitly requests it
+- NEVER run force push to main/master, warn the user if they request it
+- Avoid git commit --amend. ONLY use --amend when ALL conditions are met:
+  (1) User explicitly requested amend, OR commit SUCCEEDED but pre-commit hook auto-modified files that need including
+  (2) HEAD commit was created by you in this conversation (verify: git log -1 --format='%an %ae')
+  (3) Commit has NOT been pushed to remote (verify: git status shows "Your branch is ahead")
+- CRITICAL: If commit FAILED or was REJECTED by hook, NEVER amend - fix the issue and create a NEW commit
+- CRITICAL: If you already pushed to remote, NEVER amend unless user explicitly requests it (requires force push)
+- NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive.
+
+## 提交流程
+
+1. Run git status and git diff (in parallel) to understand current state. Also check git log for recent commit style.
+2. Analyze all changes and draft a commit message:
+   - Summarize the nature of the changes (new feature, enhancement, bug fix, refactoring, test, docs, etc.)
+   - Draft a concise (1-2 sentences) commit message that focuses on the "why" rather than the "what"
+   - Do not commit files that likely contain secrets (.env, credentials.json, etc.)
+3. Stage relevant files by name (prefer specific files over git add -A), then commit.
+4. Run git status after commit to verify success.
+5. If the commit fails due to pre-commit hook, fix the issue and create a NEW commit (see amend rules above).
+6. Do NOT push to the remote repository unless the user explicitly asks.
+
+## PR 创建流程
+
+When the user asks you to create a pull request:
+1. Run git status, git diff, and git log (parallel) to understand full branch context including commits since divergence.
+2. Analyze ALL commits that will be included in the PR (not just the latest).
+3. Create/update branch, push with -u if needed, then create PR using `gh pr create`.
+4. Return the PR URL.
+
+## 操作谨慎原则
+
+- Local edits and tests are free. Anything that affects shared systems, deletes data, or is hard to reverse requires confirmation.
+- Before destructive operations (git reset --hard, git push --force, rm -rf, etc.), warn the user and wait.
+- When you encounter unexpected state (unfamiliar files, branches, configuration), investigate before overwriting.
+- Report outcomes faithfully: if tests fail, say so; if a step was skipped, say that; when verified, state it plainly.
+- A user approving an action once does NOT mean they approve it in all contexts. Match scope to what was asked.

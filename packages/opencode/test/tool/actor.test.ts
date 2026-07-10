@@ -170,7 +170,7 @@ function reply(input: SessionPrompt.PromptInput, text: string): MessageV2.WithPa
 }
 
 describe("tool.actor", () => {
-  it.live("description sorts subagents by name and is stable across calls", () =>
+  it.live("description is stable across calls", () =>
     provideTmpdirInstance(
       () =>
         Effect.gen(function* () {
@@ -185,16 +185,7 @@ describe("tool.actor", () => {
           const second = yield* get()
 
           expect(first).toBe(second)
-
-          const alpha = first.indexOf("- alpha: Alpha agent")
-          const explore = first.indexOf("- explore:")
-          const general = first.indexOf("- general:")
-          const zebra = first.indexOf("- zebra: Zebra agent")
-
-          expect(alpha).toBeGreaterThan(-1)
-          expect(explore).toBeGreaterThan(alpha)
-          expect(general).toBeGreaterThan(explore)
-          expect(zebra).toBeGreaterThan(general)
+          expect(first).toContain("Launch a new actor")
         }),
       {
         config: {
@@ -213,7 +204,7 @@ describe("tool.actor", () => {
     ),
   )
 
-  it.live("description hides denied subagents for the caller", () =>
+  it.live("description does not include agent types (moved to system prompt)", () =>
     provideTmpdirInstance(
       () =>
         Effect.gen(function* () {
@@ -223,8 +214,8 @@ describe("tool.actor", () => {
           const description =
             (yield* registry.tools({ ...ref, agent: build })).find((tool) => tool.id === ActorTool.id)?.description ?? ""
 
-          expect(description).toContain("- alpha: Alpha agent")
-          expect(description).not.toContain("- zebra: Zebra agent")
+          expect(description).toContain("Launch a new actor")
+          expect(description).not.toContain("Available agent types")
         }),
       {
         config: {
