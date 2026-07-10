@@ -1,7 +1,7 @@
 import { Button } from "@mimo-ai/ui/button"
 import { Icon } from "@mimo-ai/ui/icon"
 import { Popover } from "@mimo-ai/ui/popover"
-import { Suspense, createMemo, createSignal, lazy, Show } from "solid-js"
+import { Suspense, createMemo, createSignal, lazy } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
 import { useSync } from "@/context/sync"
@@ -52,15 +52,13 @@ export function StatusPopover() {
       placement="bottom-end"
       shift={-90}
     >
-      <Show when={shown()}>
-        <Suspense
-          fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
-          }
-        >
-          <Body shown={shown} />
-        </Suspense>
-      </Show>
+      <Suspense
+        fallback={
+          <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
+        }
+      >
+        <Body shown={shown} />
+      </Suspense>
     </Popover>
   )
 }
