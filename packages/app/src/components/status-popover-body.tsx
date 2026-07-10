@@ -165,24 +165,14 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const sdk = useSDK()
 
   const [load, setLoad] = createStore({
-    lspDone: false,
-    lspLoading: false,
-    mcpDone: false,
     mcpLoading: false,
+    lspLoading: false,
   })
-
-  const fail = (err: unknown) => {
-    showToast({
-      variant: "error",
-      title: language.t("common.requestFailed"),
-      description: err instanceof Error ? err.message : String(err),
-    })
-  }
 
   createEffect(() => {
     if (!props.shown()) return
 
-    if (!sync.data.mcp_ready && !load.mcpDone && !load.mcpLoading) {
+    if (!sync.data.mcp_ready && !load.mcpLoading) {
       setLoad("mcpLoading", true)
       void sdk.client.mcp
         .status()
@@ -190,16 +180,15 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           sync.set("mcp", result.data ?? {})
           sync.set("mcp_ready", true)
         })
-        .catch((err) => {
-          setLoad("mcpDone", true)
-          fail(err)
+        .catch(() => {
+          // 静默失败，下次打开弹层时重试
         })
         .finally(() => {
           setLoad("mcpLoading", false)
         })
     }
 
-    if (!sync.data.lsp_ready && !load.lspDone && !load.lspLoading) {
+    if (!sync.data.lsp_ready && !load.lspLoading) {
       setLoad("lspLoading", true)
       void sdk.client.lsp
         .status()
@@ -207,9 +196,8 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           sync.set("lsp", result.data ?? [])
           sync.set("lsp_ready", true)
         })
-        .catch((err) => {
-          setLoad("lspDone", true)
-          fail(err)
+        .catch(() => {
+          // 静默失败，下次打开弹层时重试
         })
         .finally(() => {
           setLoad("lspLoading", false)

@@ -13,7 +13,7 @@ export function StatusPopover() {
   const server = useServer()
   const sync = useSync()
   const [shown, setShown] = createSignal(false)
-  const ready = createMemo(() => server.healthy() === false || sync.data.mcp_ready)
+  const ready = createMemo(() => server.healthy() !== undefined)
   const healthy = createMemo(() => {
     const serverHealthy = server.healthy() === true
     const mcp = Object.values(sync.data.mcp ?? {})
