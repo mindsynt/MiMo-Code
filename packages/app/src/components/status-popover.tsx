@@ -51,6 +51,7 @@ export function StatusPopover() {
       gutter={4}
       placement="bottom-end"
       shift={-90}
+      portal={false}
     >
       <Suspense
         fallback={
