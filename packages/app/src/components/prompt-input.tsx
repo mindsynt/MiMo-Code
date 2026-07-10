@@ -3,8 +3,6 @@ import { useSpring } from "@mimo-ai/ui/motion-spring"
 import { createEffect, on, Component, Show, onCleanup, createMemo, createSignal, createResource } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
-import { base64Encode } from "@mimo-ai/shared/util/encode"
-import { useNavigate } from "@solidjs/router"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import {
   ContentPart,
@@ -445,24 +443,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const escBlur = () => platform.platform === "desktop" && platform.os === "macos"
 
   const pick = () => fileInputRef?.click()
-
-  const navigate = useNavigate()
-  const openFolder = () => {
-    let dialogRun = 0
-    const run = ++dialogRun
-    void import("@/components/dialog-select-directory").then((x) => {
-      if (dialogRun !== run) return
-      dialog.show(
-        () => <x.DialogSelectDirectory onSelect={(result) => {
-          if (!result) return
-          const dir = Array.isArray(result) ? result[0] : result
-          layout.projects.open(dir)
-          navigate(`/${base64Encode(dir)}/session`)
-        }} />,
-        () => {},
-      )
-    })
-  }
 
   const setMode = (mode: "normal" | "shell") => {
     setStore("mode", mode)
@@ -1593,20 +1573,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Icon name="plus" class="size-4.5" />
                 </Button>
               </TooltipKeybind>
-              <Tooltip placement="top" value={language.t("command.project.open")}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  class="size-8 p-0"
-                  style={buttons()}
-                  onClick={openFolder}
-                  disabled={store.mode !== "normal"}
-                  tabIndex={store.mode === "normal" ? undefined : -1}
-                  aria-label={language.t("command.project.open")}
-                >
-                  <Icon name="folder" class="size-4.5" />
-                </Button>
-              </Tooltip>
             </div>
           </div>
         </div>

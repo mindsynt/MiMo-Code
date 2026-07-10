@@ -1,15 +1,17 @@
 import { useDialog } from "@mimo-ai/ui/context/dialog"
 import { Dialog } from "@mimo-ai/ui/dialog"
 import { FileIcon } from "@mimo-ai/ui/file-icon"
+import { IconButton } from "@mimo-ai/ui/icon-button"
 import { List } from "@mimo-ai/ui/list"
 import type { ListRef } from "@mimo-ai/ui/list"
 import { getDirectory, getFilename } from "@mimo-ai/shared/util/path"
 import fuzzysort from "fuzzysort"
-import { createMemo, createResource, createSignal } from "solid-js"
+import { createMemo, createResource, createSignal, Show } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { useLanguage } from "@/context/language"
+import { usePlatform } from "@/context/platform"
 
 interface DialogSelectDirectoryProps {
   title?: string
@@ -251,6 +253,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const layout = useLayout()
   const dialog = useDialog()
   const language = useLanguage()
+  const platform = usePlatform()
 
   const [filter, setFilter] = createSignal("")
   let list: ListRef | undefined
@@ -321,8 +324,29 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     dialog.close()
   }
 
+  const handleNativePicker = () => {
+    if (!platform.openDirectoryPickerDialog) return
+    dialog.close()
+    platform.openDirectoryPickerDialog({ title: language.t("command.project.open"), multiple: props.multiple }).then((result) => {
+      if (result) props.onSelect(result)
+    })
+  }
+
   return (
-    <Dialog title={props.title ?? language.t("command.project.open")}>
+    <Dialog
+      title={props.title ?? language.t("command.project.open")}
+      action={
+        <Show when={!!platform.openDirectoryPickerDialog}>
+          <IconButton
+            icon="folder"
+            variant="ghost"
+            size="small"
+            onClick={handleNativePicker}
+            aria-label={language.t("command.project.open")}
+          />
+        </Show>
+      }
+    >
       <List
         search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: true }}
         emptyMessage={language.t("dialog.directory.empty")}
