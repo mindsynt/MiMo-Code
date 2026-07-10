@@ -22,6 +22,7 @@ import {
   Message as MessageType,
   Part as PartType,
   ReasoningPart,
+  SubtaskPart,
   TextPart,
   ToolPart,
   UserMessage,
@@ -1436,6 +1437,26 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
         </Show>
       </div>
     </Show>
+  )
+}
+PART_MAPPING["subtask"] = function SubtaskPartDisplay(props) {
+  const i18n = useI18n()
+  const part = () => props.part as SubtaskPart
+
+  return (
+    <BasicTool
+      icon="mcp"
+      status="completed"
+      trigger={{
+        title: part().command
+          ? i18n.t("ui.tool.command", { command: part().command ?? "" })
+          : part().agent
+            ? i18n.t("ui.tool.agent", { type: part().agent ?? "" })
+            : i18n.t("ui.tool.skill"),
+        subtitle: part().description || part().prompt?.slice(0, 80),
+        args: part().prompt ? [part().prompt.slice(0, 120)] : [],
+      }}
+    />
   )
 }
 
