@@ -50,7 +50,7 @@ export function StatusPopover() {
       class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
       gutter={4}
       placement="bottom-end"
-      shift={-168}
+      shift={-90}
     >
       <Show when={shown()}>
         <Suspense
