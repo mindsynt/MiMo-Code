@@ -542,22 +542,36 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const [composing, setComposing] = createSignal(false)
   const isImeComposing = (event: KeyboardEvent) => event.isComposing || composing() || event.keyCode === 229
+  let compositionEndTimer: ReturnType<typeof setTimeout> | undefined
 
   const handleBlur = () => {
     closePopover()
     setComposing(false)
+    if (compositionEndTimer !== undefined) {
+      clearTimeout(compositionEndTimer)
+      compositionEndTimer = undefined
+    }
   }
 
   const handleCompositionStart = () => {
     setComposing(true)
+    if (compositionEndTimer !== undefined) {
+      clearTimeout(compositionEndTimer)
+      compositionEndTimer = undefined
+    }
   }
 
   const handleCompositionEnd = () => {
-    setComposing(false)
-    requestAnimationFrame(() => {
-      if (composing()) return
-      reconcile(prompt.current().filter((part) => part.type !== "image"))
-    })
+    // 延迟重置 composing 标志，以便后续的 Enter 键事件（用于确认输入法选词）
+    // 仍然能识别出合成刚结束，防止意外提交表单
+    compositionEndTimer = setTimeout(() => {
+      compositionEndTimer = undefined
+      setComposing(false)
+      requestAnimationFrame(() => {
+        if (composing()) return
+        reconcile(prompt.current().filter((part) => part.type !== "image"))
+      })
+    }, 0)
   }
 
   const agentList = createMemo(() =>
@@ -1115,9 +1129,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   createEffect(() => {
     voice.setOnCommand?.((cmd) => {
       switch (cmd) {
-        case "send":
-          handleSubmit(new Event("submit"))
-          break
         case "clear":
           prompt.reset()
           clearEditor()
@@ -1133,11 +1144,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           break
       }
     })
-    voice.setOnSend?.(() => {
-      handleSubmit(new Event("submit"))
-    })
+    voice.setOnSend?.(() => {})
 
-    // Phase 1+2+3: 每个语音段实时提交到编辑器（TUI 三段式模式）
+    // 实时将语音段提交到编辑器（不自动发送）
     const liveHandler = (text: string) => {
       commitVoiceSegment(text)
     }
@@ -1261,6 +1270,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     if (event.key === "Enter" && isImeComposing(event)) {
+      event.preventDefault()
       return
     }
 

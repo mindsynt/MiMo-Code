@@ -47,7 +47,6 @@ interface VoiceCommand {
 }
 
 const VOICE_COMMANDS: VoiceCommand[] = [
-  { pattern: /^(send|submit|go|发送|提交)$/i, action: "send" },
   { pattern: /^(clear|erase|清空|清除)$/i, action: "clear" },
   { pattern: /^(new|new.session|新建|新会话)$/i, action: "new" },
   { pattern: /^(undo|撤销)$/i, action: "undo" },
@@ -101,19 +100,13 @@ export const { use: useVoice, provider: VoiceProvider } = createSimpleContext({
     })
 
     const handleFinalText = (text: string) => {
+      // 保护：仅在正在录音时处理语音识别结果，防止竞态条件或后台误触发
+      if (!isListening()) return
+
       if (voiceControl()) {
         const matched = VOICE_COMMANDS.find((cmd) => cmd.pattern.test(text.trim()))
         if (matched) {
           commandHandler()?.(matched.action)
-          setTranscript("")
-          setInterimTranscript("")
-          return
-        }
-      }
-      if (voiceSend()) {
-        const sendMatch = /^(send|submit|go|发送|提交)$/i.test(text.trim())
-        if (sendMatch) {
-          sendHandler()?.()
           setTranscript("")
           setInterimTranscript("")
           return

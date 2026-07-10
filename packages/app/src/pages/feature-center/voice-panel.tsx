@@ -78,12 +78,6 @@ export const VoicePanel = () => {
         <Switch checked={voice.voiceControl()} onChange={(checked) => voice.setVoiceControl(checked)} />
       </div>
 
-      {/* Voice send toggle */}
-      <div class="flex items-center justify-between">
-        <span class="text-14-regular text-text-strong">{language.t("voice.send")}</span>
-        <Switch checked={voice.voiceSend()} onChange={(checked) => voice.setVoiceSend(checked)} />
-      </div>
-
       {/* Test microphone button */}
       <Button variant="secondary" onClick={() => voice.toggleListening()}>
         {voice.isListening() ? language.t("voice.stop.test") : language.t("voice.test")}
