@@ -579,11 +579,11 @@ export function AssistantParts(props: {
 
   // 将分组结果按 messageID 归类，每个 assistant message 成为一个可折叠的组
   const messageGroups = createMemo(() => {
-    const result: Array<{ message: AssistantMessage; groups: PartGroup[] }> = []
-    const byMsg = new Map<string, { message: AssistantMessage; groups: PartGroup[] }>()
+    const result: Array<{ message: AssistantMessage; groups: PartGroup[]; summary: { action: string; detail: string } }> = []
+    const byMsg = new Map<string, { message: AssistantMessage; groups: PartGroup[]; summary: { action: string; detail: string } }>()
 
     for (const msg of props.messages) {
-      const entry = { message: msg, groups: [] as PartGroup[] }
+      const entry = { message: msg, groups: [] as PartGroup[], summary: { action: "", detail: "" } }
       byMsg.set(msg.id, entry)
       result.push(entry)
     }
@@ -602,6 +602,35 @@ export function AssistantParts(props: {
       }
     }
 
+    // 为每个 message 生成摘要：工具名称去重，简化展示
+    for (const entry of result) {
+      const toolNames = new Set<string>()
+      let mainPath = ""
+      for (const g of entry.groups) {
+        if (g.type === "context") {
+          for (const ref of g.refs) {
+            const p = part().get(ref.messageID)?.get(ref.partID)
+            if (p && p.type === "tool") {
+              const info = getToolInfo(p.tool, p.state.input ?? {})
+              if (info.title) toolNames.add(info.title)
+              if (!mainPath && info.subtitle) mainPath = info.subtitle
+            }
+          }
+        } else if (g.type === "part") {
+          const p = part().get(g.ref.messageID)?.get(g.ref.partID)
+          if (p?.type === "tool") {
+            const info = getToolInfo(p.tool, p.state.input ?? {})
+            if (info.title) toolNames.add(info.title)
+            if (!mainPath && info.subtitle) mainPath = info.subtitle
+          }
+        }
+      }
+      const names = [...toolNames]
+      const action = names.length > 0 ? names.join(" · ") : "Message"
+      const detail = mainPath || ""
+      entry.summary = { action, detail }
+    }
+
     return result.filter((entry) => entry.groups.length > 0)
   })
 
@@ -614,10 +643,10 @@ export function AssistantParts(props: {
         {(entryAccessor) => {
           const entry = entryAccessor()
           const msg = entry.message
-          const agentId = (msg as any).agentID
+          const agentName = msg.agent ?? msg.agentID ?? "agent"
           const expanded = () => expandedMessages[msg.id] ?? false
 
-          // 统计工具数量和思考
+          // 统计各类工具数量
           let toolCount = 0
           let hasReasoning = false
           for (const g of entry.groups) {
@@ -630,30 +659,40 @@ export function AssistantParts(props: {
             }
           }
 
+          const tags: string[] = []
+          if (hasReasoning) tags.push("thinking")
+          if (toolCount > 0) tags.push(`${toolCount} tools`)
+
           return (
             <Collapsible
               open={expanded()}
               onOpenChange={(v) => setExpandedMessages(msg.id, v)}
               variant="ghost"
-              class="agent-turn-collapsible"
+              class="mb-1"
             >
               <Collapsible.Trigger>
-                <div class="flex items-center gap-2 px-3 py-1.5 text-13-medium text-text-weak bg-surface-base hover:bg-surface-base-hover rounded-lg transition-colors w-full border-0 text-left cursor-pointer">
-                  <Icon name="chevron-down" size="small" classList={{ "-rotate-90": !expanded() }} />
-                  <span>
-                    {agentId ?? "agent"}
-                    <Show when={toolCount > 0 || hasReasoning}>
-                      <span class="text-text-weak ml-1">
-                        ({[
-                          toolCount > 0 ? `${toolCount} tools` : "",
-                          hasReasoning ? "thinking" : "",
-                        ].filter(Boolean).join(", ")})
-                      </span>
-                    </Show>
-                  </span>
+                <div
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors w-full border-0 text-left cursor-pointer text-14-medium"
+                  classList={{
+                    "bg-surface-raised-base hover:bg-surface-raised-base-hover": !expanded(),
+                    "bg-surface-base rounded-b-none": expanded(),
+                  }}
+                >
+                  <Icon name="chevron-down" size="small" class="shrink-0 transition-transform" classList={{ "-rotate-90": !expanded() }} />
+                  <span class="size-2 shrink-0 rounded-full bg-icon-interactive-base" />
+                  <span class="font-medium text-text-strong truncate">{agentName}</span>
+                  <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
+                  <Show when={tags.length > 0}>
+                    <span class="shrink-0 text-12-medium text-text-dimmed bg-surface-weak px-1.5 py-0.5 rounded">
+                      {tags.join(" · ")}
+                    </span>
+                  </Show>
+                  <Show when={entry.summary.detail}>
+                    <span class="shrink-0 text-12-regular text-text-dimmed truncate max-w-32">{entry.summary.detail}</span>
+                  </Show>
                 </div>
               </Collapsible.Trigger>
-              <div class="pt-1">
+              <div class="bg-surface-base rounded-b-lg pb-2">
                 <Index each={entry.groups}>
                   {(groupAccessor) => {
                     const groupType = createMemo(() => groupAccessor().type)
