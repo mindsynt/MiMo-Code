@@ -1295,10 +1295,15 @@
   }
 }
 
-/* Agent turn accordion content: 左边界视觉引导线 */
+/* Agent turn accordion trigger */
 [data-slot="agent-turn-trigger"] {
   flex: 1;
   min-width: 0;
+  font-size: 13px;
+
+  .font-semibold {
+    font-size: 13px;
+  }
 }
 
 [data-slot="accordion-content"] [data-component="text-part"] [data-component="markdown"] {
@@ -1377,15 +1382,6 @@
 [data-component="agent-turn-content"] [data-component="bash-output"] {
   max-height: 30vh;
   overflow-y: auto;
-}
-
-/* agent 折叠头字体协调 */
-[data-slot="agent-turn-trigger"] {
-  font-size: 13px;
-
-  .font-semibold {
-    font-size: 13px;
-  }
 }
 
 /* 标签徽章 */
