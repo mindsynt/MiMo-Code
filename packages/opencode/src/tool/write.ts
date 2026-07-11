@@ -83,26 +83,6 @@ export const WriteTool = Tool.define(
             output,
           }
         }).pipe(Effect.orDie),
-      verify: (result, params, ctx) =>
-        Effect.gen(function* () {
-          const args = params as { content: string; file_path: string }
-          if (!args.file_path || !args.content) return undefined
-
-          const filePath = path.isAbsolute(args.file_path)
-            ? args.file_path
-            : path.join(SessionCwd.get(ctx.sessionID), args.file_path)
-
-          const eff: Effect.Effect<string, never, never> = fs.readFileString(filePath).pipe(
-            Effect.orElseSucceed(() => ""),
-          ) as any
-          const content = yield* eff
-          if (!content) return undefined
-
-          if (typeof args.content === "string" && args.content.length > 0 && content.length === 0) {
-            return "⚠ File verification warning: the written file appears to be empty"
-          }
-          return undefined
-        }) as any,
     }
   }),
 )

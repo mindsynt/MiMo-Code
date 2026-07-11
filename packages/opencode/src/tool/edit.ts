@@ -189,33 +189,6 @@ export const EditTool = Tool.define(
             output,
           }
         }),
-      verify: (result, params, ctx) =>
-        Effect.gen(function* () {
-          const args = params as z.infer<typeof Parameters>
-          if (!args.file_path) return undefined
-          if (args.old_string === "" && !args.new_string) return undefined
-
-          const filePath = path.isAbsolute(args.file_path)
-            ? args.file_path
-            : path.join(SessionCwd.get(ctx.sessionID), args.file_path)
-
-          const eff: Effect.Effect<string, never, never> = afs.readFileString(filePath).pipe(
-            Effect.orElseSucceed(() => ""),
-          ) as any
-          const content = yield* eff
-          if (!content) return undefined
-
-          const warnings: string[] = []
-          if (args.old_string && args.old_string !== "" && content.includes(args.old_string)) {
-            warnings.push("- old_string is still present in the file after edit — the replacement may not have been applied")
-          }
-          if (args.new_string && !content.includes(args.new_string)) {
-            warnings.push("- new_string was NOT found in the file after edit — the change may not have been written")
-          }
-          return warnings.length > 0
-            ? "⚠ File verification warnings:\n" + warnings.join("\n")
-            : undefined
-        }) as any,
     }
   }),
 )
