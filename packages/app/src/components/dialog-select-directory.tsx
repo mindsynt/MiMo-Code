@@ -200,19 +200,20 @@ function useDirectorySearch(args: {
         .catch(() => [])
 
     if (!isPath) {
-      const results = await find()
+      // 同时从 home 和根目录搜索，合并结果让搜索覆盖所有文件
+      const [homeResults, rootResults] = await Promise.all([
+        find().then((results) => results.map((rel) => joinPath(scopedInput.directory, rel))).catch(() => [] as string[]),
+        scopedInput.directory !== "/"
+          ? args.sdk.client.find
+              .files({ directory: "/", query, type: "directory", limit: 50 })
+              .then((x) => (x.data ?? []).map((rel) => joinPath("/", rel)))
+              .catch(() => [] as string[])
+          : Promise.resolve([] as string[]),
+      ])
       if (!active()) return []
-      const homeResults = results.map((rel) => joinPath(scopedInput.directory, rel)).slice(0, 50)
-      // 如果 home 目录没搜到，尝试从根目录搜索
-      if (homeResults.length === 0 && scopedInput.directory !== "/") {
-        const rootResults = await args.sdk.client.find
-          .files({ directory: "/", query, type: "directory", limit: 50 })
-          .then((x) => x.data ?? [])
-          .catch(() => [])
-        if (!active()) return []
-        return rootResults.map((rel) => joinPath("/", rel)).slice(0, 50)
-      }
-      return homeResults
+      const merged = [...homeResults, ...rootResults]
+      const deduped = Array.from(new Set(merged)).slice(0, 50)
+      return deduped
     }
 
     const segments = query.replace(/^\/+/, "").split("/")
