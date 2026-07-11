@@ -628,13 +628,15 @@ export function AssistantParts(props: {
       }
       let taskDesc = ""
 
-      // 匹配父级消息中的 task 工具（子 agent 的任务描述）
-      if (props.parentParts) {
-        for (const p of props.parentParts) {
-          if (p.type === "tool" && p.tool === "task") {
+      // 在所有 assistant message 中查找 actor/task 工具调用的描述
+      for (const m of props.messages) {
+        for (const p of list(data.store.part?.[m.id], emptyParts)) {
+          if (p.type === "tool" && (p.tool === "actor" || p.tool === "task")) {
             const input = (p.state.input ?? {}) as Record<string, unknown>
-            if (String(input.subagent_type).toLowerCase() === entry.message.agent?.toLowerCase()) {
-              taskDesc = String(input.description ?? "")
+            const op = (input.operation as Record<string, unknown>) ?? input
+            const agentType = String(op.subagent_type ?? "").toLowerCase()
+            if (agentType === entry.message.agent?.toLowerCase()) {
+              taskDesc = String(op.description ?? "")
             }
           }
         }
@@ -700,10 +702,11 @@ export function AssistantParts(props: {
                 <Accordion.Trigger>
                   <div data-slot="agent-turn-trigger">
                     <div class="flex items-center gap-2 min-w-0">
-                      <Icon name="chevron-down" size="small" data-slot="agent-turn-chevron" />
-                      <span class="size-2 shrink-0 rounded-full bg-icon-interactive-base" />
+                      <Icon name="chevron-down" size="small" data-slot="accordion-chevron" />
                       <span class="font-medium text-text-strong truncate">{agentName}</span>
-                      <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
+                      <Show when={entry.summary.action}>
+                        <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
+                      </Show>
                       <Show when={tags.length > 0}>
                         <span class="shrink-0 text-12-medium text-text-dimmed bg-surface-weak px-1.5 py-0.5 rounded">
                           {tags.join(" · ")}
