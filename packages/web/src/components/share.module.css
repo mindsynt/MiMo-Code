@@ -4,15 +4,28 @@
   gap: 2.5rem;
   line-height: 1;
   padding: 1.5rem;
+  padding-bottom: 4rem;
 
   @media (max-width: 30rem) {
     padding: 1rem;
+    padding-bottom: 3rem;
     gap: 2rem;
   }
 
   --sm-tool-width: 28rem;
   --md-tool-width: 40rem;
   --lg-tool-width: 56rem;
+
+  @media (min-width: 90rem) {
+    --sm-tool-width: 32rem;
+    --md-tool-width: 48rem;
+    --lg-tool-width: 64rem;
+  }
+
+  @media (min-width: 120rem) {
+    --md-tool-width: 56rem;
+    --lg-tool-width: 72rem;
+  }
 
   --term-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2060%2016'%20preserveAspectRatio%3D'xMidYMid%20meet'%3E%3Ccircle%20cx%3D'8'%20cy%3D'8'%20r%3D'8'%2F%3E%3Ccircle%20cx%3D'30'%20cy%3D'8'%20r%3D'8'%2F%3E%3Ccircle%20cx%3D'52'%20cy%3D'8'%20r%3D'8'%2F%3E%3C%2Fsvg%3E");
 
@@ -807,7 +820,7 @@
   right: 2rem;
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.25rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--sl-color-divider);
   background-color: var(--sl-color-bg-surface);
   color: var(--sl-color-text-secondary);
@@ -815,15 +828,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    all 0.15s ease,
-    opacity 0.5s ease;
+  transition: all 0.2s ease;
   z-index: 100;
   appearance: none;
-  opacity: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  &:hover {
+    background-color: var(--color-background-weak-hover);
+    color: var(--sl-color-text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
 
   &:active {
-    transform: translateY(1px);
+    transform: translateY(0px);
   }
 
   svg {

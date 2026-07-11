@@ -1,6 +1,7 @@
 .root {
   display: flex;
   gap: 0.625rem;
+  scroll-margin-top: 1.5rem;
 
   [data-component="decoration"] {
     flex: 0 0 auto;

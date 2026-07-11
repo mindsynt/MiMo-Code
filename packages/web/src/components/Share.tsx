@@ -176,11 +176,10 @@ export default function Share(props: {
 
   function checkScrollNeed() {
     const currentScrollY = window.scrollY
-    const isScrollingDown = currentScrollY > lastScrollY
-    const scrolled = currentScrollY > 200 // Show after scrolling 200px
+    const scrolled = currentScrollY > 300 // Show after scrolling 300px
 
-    // Only show when scrolling down, scrolled enough, and not near bottom
-    const shouldShow = isScrollingDown && scrolled && !isNearBottom()
+    // Show when scrolled enough and not near bottom
+    const shouldShow = scrolled && !isNearBottom()
 
     // Update last scroll position
     lastScrollY = currentScrollY
@@ -191,12 +190,12 @@ export default function Share(props: {
       if (scrollTimeout) {
         clearTimeout(scrollTimeout)
       }
-      // Hide button after 3 seconds of no scrolling (unless hovered)
+      // Hide button after 4 seconds of no scrolling (unless hovered)
       scrollTimeout = window.setTimeout(() => {
         if (!isButtonHovered()) {
           setShowScrollButton(false)
         }
-      }, 1500)
+      }, 4000)
     } else if (!isButtonHovered()) {
       // Only hide if not hovered (to prevent disappearing while user is about to click)
       setShowScrollButton(false)

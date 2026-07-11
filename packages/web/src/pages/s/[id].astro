@@ -151,6 +151,29 @@ const ogImage = `${config.socialCard}/opencode-share/${encodedTitle}.png?model=$
 </StarlightPage>
 
 <style is:global>
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 1rem;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sl-color-gray-5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-weaker);
+}
+
 body > .page > .main-frame .main-pane > main > .content-panel:first-of-type {
   display: none;
 }

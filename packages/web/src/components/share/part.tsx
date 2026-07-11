@@ -611,12 +611,23 @@ export function EditTool(props: ToolProps) {
 }
 
 export function BashTool(props: ToolProps) {
+  const messages = useShareMessages()
   return (
-    <ContentBash
-      command={props.state.input.command}
-      output={props.state.metadata.output ?? props.state.metadata?.stdout}
-      description={props.state.metadata.description}
-    />
+    <>
+      <div data-component="tool-title">
+        <span data-slot="name">Shell</span>
+        <Show when={props.state.input.description}>
+          <span data-slot="target">{props.state.input.description}</span>
+        </Show>
+      </div>
+      <ResultsButton showCopy={messages.show_output} hideCopy={messages.hide_output}>
+        <ContentBash
+          command={props.state.input.command}
+          output={props.state.metadata.output ?? props.state.metadata?.stdout}
+          description={props.state.metadata.description}
+        />
+      </ResultsButton>
+    </>
   )
 }
 

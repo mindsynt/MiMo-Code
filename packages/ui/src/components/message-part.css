@@ -359,14 +359,7 @@
 
   &[data-scrollable] {
     height: auto;
-    max-height: 240px;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
+    overflow: visible;
 
     [data-component="markdown"] {
       overflow: visible;
@@ -408,14 +401,7 @@
 
   [data-slot="bash-scroll"] {
     width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    max-height: 240px;
-
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
+    overflow: visible;
   }
 
   [data-slot="bash-pre"] {
@@ -1370,18 +1356,15 @@
   margin: 8px 0 12px;
 }
 
-/* agent 消息内容区域：超出限制高度后出现滚动条 */
+/* agent 消息内容区域：自然展开，不产生内部滚动 */
 [data-component="agent-turn-content"] {
-  max-height: 40vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
 }
 
-/* 工具输出在 agent 内容中不溢出 */
+/* 工具输出在 agent 内容中自然展开 */
 [data-component="agent-turn-content"] [data-component="tool-output"],
 [data-component="agent-turn-content"] [data-component="bash-output"] {
-  max-height: 30vh;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 /* 标签徽章 */
