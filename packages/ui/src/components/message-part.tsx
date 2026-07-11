@@ -12,7 +12,7 @@ import {
   Index,
   type JSX,
 } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, produce } from "solid-js/store"
 import stripAnsi from "strip-ansi"
 import { Dynamic } from "solid-js/web"
 import {
@@ -649,17 +649,33 @@ export function AssistantParts(props: {
     return result.filter((entry) => entry.groups.length > 0)
   })
 
-  // 折叠面板状态
   const [expandedMessages, setExpandedMessages] = createStore<Record<string, boolean>>({})
+  const expandedValues = createMemo(() =>
+    Object.entries(expandedMessages)
+      .filter(([, v]) => v)
+      .map(([k]) => k),
+  )
 
   return (
     <Show when={messageGroups().length > 0}>
+      <Accordion
+        multiple
+        value={expandedValues()}
+        onChange={(value) => {
+          const next = value as string[]
+          setExpandedMessages(produce((draft) => {
+            for (const key of next) draft[key] = true
+            for (const entry of messageGroups()) {
+              if (!next.includes(entry.message.id)) draft[entry.message.id] = false
+            }
+          }))
+        }}
+      >
       <Index each={messageGroups()}>
         {(entryAccessor) => {
           const entry = entryAccessor()
           const msg = entry.message
           const agentName = msg.agent ?? msg.agentID ?? "agent"
-          const expanded = () => expandedMessages[msg.id] ?? false
 
           // 统计各类工具数量
           let toolCount = 0
@@ -679,35 +695,25 @@ export function AssistantParts(props: {
           if (toolCount > 0) tags.push(`${toolCount} tools`)
 
           return (
-            <Collapsible
-              open={expanded()}
-              onOpenChange={(v) => setExpandedMessages(msg.id, v)}
-              variant="ghost"
-              class="mb-1"
-            >
-              <Collapsible.Trigger>
-                <div
-                  class="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors w-full border-0 text-left cursor-pointer text-14-medium"
-                  classList={{
-                    "bg-surface-raised-base hover:bg-surface-raised-base-hover": !expanded(),
-                    "bg-surface-base rounded-b-none": expanded(),
-                  }}
-                >
-                  <Icon name="chevron-down" size="small" class="shrink-0 transition-transform" classList={{ "-rotate-90": !expanded() }} />
-                  <span class="size-2 shrink-0 rounded-full bg-icon-interactive-base" />
-                  <span class="font-medium text-text-strong truncate">{agentName}</span>
-                  <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
-                  <Show when={tags.length > 0}>
-                    <span class="shrink-0 text-12-medium text-text-dimmed bg-surface-weak px-1.5 py-0.5 rounded">
-                      {tags.join(" · ")}
-                    </span>
-                  </Show>
-                  <Show when={entry.summary.detail}>
-                    <span class="shrink-0 text-12-regular text-text-dimmed truncate max-w-32">{entry.summary.detail}</span>
-                  </Show>
-                </div>
-              </Collapsible.Trigger>
-              <div class="bg-surface-base rounded-b-lg pb-2">
+            <Accordion.Item value={msg.id}>
+              <StickyAccordionHeader>
+                <Accordion.Trigger>
+                  <div data-slot="agent-turn-trigger">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <Icon name="chevron-down" size="small" data-slot="agent-turn-chevron" />
+                      <span class="size-2 shrink-0 rounded-full bg-icon-interactive-base" />
+                      <span class="font-medium text-text-strong truncate">{agentName}</span>
+                      <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
+                      <Show when={tags.length > 0}>
+                        <span class="shrink-0 text-12-medium text-text-dimmed bg-surface-weak px-1.5 py-0.5 rounded">
+                          {tags.join(" · ")}
+                        </span>
+                      </Show>
+                    </div>
+                  </div>
+                </Accordion.Trigger>
+              </StickyAccordionHeader>
+              <Accordion.Content>
                 <Index each={entry.groups}>
                   {(groupAccessor) => {
                     const groupType = createMemo(() => groupAccessor().type)
@@ -758,11 +764,12 @@ export function AssistantParts(props: {
                     )
                   }}
                 </Index>
-              </div>
-            </Collapsible>
+              </Accordion.Content>
+            </Accordion.Item>
           )
         }}
       </Index>
+    </Accordion>
     </Show>
   )
 }
