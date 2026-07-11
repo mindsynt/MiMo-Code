@@ -160,6 +160,7 @@ export function SessionSidePanel(props: {
     activeDraggable: undefined as string | undefined,
   })
   const [docCount, setDocCount] = createSignal(0)
+  const [taskCount, setTaskCount] = createSignal(0)
 
   const handleDragStart = (event: unknown) => {
     const id = getDraggableId(event)
@@ -292,6 +293,9 @@ export function SessionSidePanel(props: {
                       <Tabs.Trigger value="tasks">
                         <div class="flex items-center gap-1.5">
                           <div>{language.t("session.tab.tasks")}</div>
+                          <Show when={taskCount() > 0}>
+                            <span class="text-11-regular text-text-interactive-base ml-0.5">{taskCount()}</span>
+                          </Show>
                         </div>
                       </Tabs.Trigger>
                       <SortableProvider ids={openedTabs()}>
@@ -356,11 +360,9 @@ export function SessionSidePanel(props: {
                   </Tabs.Content>
 
                   <Tabs.Content value="tasks" class="flex flex-col h-full overflow-hidden contain-strict">
-                    <Show when={activeTab() === "tasks"}>
-                      <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
-                        <SessionTasksTab />
-                      </div>
-                    </Show>
+                    <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                      <SessionTasksTab onCount={setTaskCount} />
+                    </div>
                   </Tabs.Content>
 
                   <Show when={activeFileTab()} keyed>

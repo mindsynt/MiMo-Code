@@ -195,8 +195,8 @@ describe("applyDirectoryEvent", () => {
     expect(store.message.ses_1).toBeUndefined()
     expect(store.part[message.id]).toBeUndefined()
     expect(store.session_diff.ses_1).toBeUndefined()
-    // todo 在 session 裁剪时保留（仅归档会话才清理）
-    expect(store.todo.ses_1).toEqual([])
+    // 归档 session 清理 todo（与裁剪不同）
+    expect(store.todo.ses_1).toBeUndefined()
     expect(store.permission.ses_1).toBeUndefined()
     expect(store.question.ses_1).toBeUndefined()
     expect(store.session_status.ses_1).toBeUndefined()

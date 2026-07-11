@@ -1,20 +1,14 @@
-import { createMemo, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useLanguage } from "@/context/language"
 import { ScrollView } from "@mimo-ai/ui/scroll-view"
+import { Icon } from "@mimo-ai/ui/icon"
 import type { Todo } from "@mimo-ai/sdk/v2/client"
 
 type TodoItem = {
   sessionID: string
   sessionTitle: string
   todo: Todo
-}
-
-const STATUS_ORDER: Record<string, number> = {
-  pending: 0,
-  in_progress: 1,
-  completed: 2,
-  cancelled: 3,
 }
 
 const STATUS_KEYS: Record<string, string> = {
@@ -24,14 +18,34 @@ const STATUS_KEYS: Record<string, string> = {
   cancelled: "session.tasks.status.cancelled",
 }
 
+const STATUS_ICONS: Record<string, string> = {
+  pending: "circle-x",
+  in_progress: "circle-check",
+  completed: "circle-check",
+  cancelled: "circle-ban-sign",
+}
+
 function sessionTitle(session: { title?: string; id: string } | undefined) {
   if (!session) return ""
   return session.title ?? session.id
 }
 
-export function SessionTasksTab() {
+const syncTodo = (sync: ReturnType<typeof useSync>, sessionID: string) => {
+  const s: any = sync
+  return s.todo?.(sessionID) ?? Promise.resolve()
+}
+
+export function SessionTasksTab(props: { onCount?: (count: number) => void }) {
   const sync = useSync()
   const language = useLanguage()
+
+  onMount(() => {
+    const sessions = sync.data.session ?? []
+    for (const session of sessions) {
+      const todos = sync.data.todo[session.id]
+      if (todos === undefined) syncTodo(sync, session.id)
+    }
+  })
 
   const allTodos = createMemo(() => {
     const sessions = sync.data.session ?? []
@@ -67,39 +81,60 @@ export function SessionTasksTab() {
     return n
   })
 
+  createEffect(() => props.onCount?.(total()))
+
   return (
-    <div class="h-full flex flex-col overflow-hidden">
+    <div class="h-full flex flex-col overflow-hidden" data-component="session-review">
       <ScrollView class="flex-1">
-        <div class="px-4 pt-4 pb-10 flex flex-col gap-5">
+        <div class="px-3 pt-3 pb-12 flex flex-col gap-3">
           <Show
             when={total() > 0}
             fallback={
-              <div class="text-12-regular text-text-weak px-2">
+              <div class="text-12-regular text-text-weak px-1.5 py-1">
                 {language.t("session.tasks.empty" as Parameters<typeof language.t>[0])}
               </div>
             }
           >
             <For each={orderedStatuses()}>
               {(status) => (
-                <div class="flex flex-col gap-1.5">
-                  <div class="flex items-center gap-2 text-12-medium text-text-strong uppercase tracking-wider">
-                    <span>{language.t(STATUS_KEYS[status] as Parameters<typeof language.t>[0])}</span>
-                    <span class="text-text-weak">({allTodos()[status]!.length})</span>
+                <div class="flex flex-col rounded-lg border border-border-base overflow-hidden bg-background-base">
+                  <div class="h-8 flex items-center gap-x-1.5 px-3 border-b border-border-base bg-surface-raised-base">
+                    <Icon
+                      name={STATUS_ICONS[status] as any}
+                      size="small"
+                      class="size-4 shrink-0"
+                      classList={{
+                        "text-icon-success-base": status === "completed",
+                        "text-icon-warning-base": status === "pending",
+                        "text-icon-info-base": status === "in_progress",
+                        "text-text-weak": status === "cancelled",
+                      }}
+                    />
+                    <span class="text-12-medium text-text-strong uppercase tracking-wider">
+                      {language.t(STATUS_KEYS[status] as Parameters<typeof language.t>[0])}
+                    </span>
+                    <span class="text-12-medium text-text-base">({allTodos()[status]!.length})</span>
                   </div>
-                  <div class="flex flex-col gap-0.5">
-                    <For each={allTodos()[status]}>
-                      {(item) => (
-                        <div class="flex flex-col px-2 py-1.5 rounded-md bg-surface-base">
-                          <div class="text-12-regular text-text-strong">{item.todo.content}</div>
-                          <Show when={item.sessionTitle}>
-                            <div class="text-11-regular text-text-weak truncate mt-0.5">
-                              {item.sessionTitle}
-                            </div>
-                          </Show>
-                        </div>
-                      )}
-                    </For>
-                  </div>
+                  <For each={allTodos()[status]}>
+                    {(item) => (
+                      <div class="group w-full min-w-0 h-8 flex items-center justify-start gap-x-2 px-3 py-0 hover:bg-surface-raised-base-hover transition-colors border-b border-border-weaker-base last:border-b-0 bg-background-base">
+                        <Icon
+                          name={STATUS_ICONS[status] as any}
+                          size="small"
+                          class="size-4 shrink-0"
+                          classList={{
+                            "text-icon-success-base": status === "completed",
+                            "text-icon-warning-base": status === "pending",
+                            "text-icon-info-base": status === "in_progress",
+                            "text-text-weak": status === "cancelled",
+                          }}
+                        />
+                        <span class="flex-1 min-w-0 text-13-medium whitespace-nowrap truncate text-text-strong">
+                          {item.todo.content}
+                        </span>
+                      </div>
+                    )}
+                  </For>
                 </div>
               )}
             </For>
