@@ -202,7 +202,17 @@ function useDirectorySearch(args: {
     if (!isPath) {
       const results = await find()
       if (!active()) return []
-      return results.map((rel) => joinPath(scopedInput.directory, rel)).slice(0, 50)
+      const homeResults = results.map((rel) => joinPath(scopedInput.directory, rel)).slice(0, 50)
+      // 如果 home 目录没搜到，尝试从根目录搜索
+      if (homeResults.length === 0 && scopedInput.directory !== "/") {
+        const rootResults = await args.sdk.client.find
+          .files({ directory: "/", query, type: "directory", limit: 50 })
+          .then((x) => x.data ?? [])
+          .catch(() => [])
+        if (!active()) return []
+        return rootResults.map((rel) => joinPath("/", rel)).slice(0, 50)
+      }
+      return homeResults
     }
 
     const segments = query.replace(/^\/+/, "").split("/")
