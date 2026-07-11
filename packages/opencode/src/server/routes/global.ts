@@ -16,6 +16,8 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config"
 import { ExternalImport } from "../../session/external-import"
 import { errors } from "../error"
+import fs from "node:fs/promises"
+import path from "node:path"
 
 const log = Log.create({ service: "server" })
 
@@ -362,6 +364,47 @@ export const GlobalRoutes = lazy(() =>
       async (c) => {
         const { sources, force } = c.req.valid("json")
         return c.json(await ExternalImport.runAll({ sources, force }))
+      },
+    )
+    .get(
+      "/browse",
+      describeRoute({
+        summary: "Browse filesystem",
+        description: "List directories at an absolute path for the project picker.",
+        operationId: "global.browse",
+        responses: {
+          200: {
+            description: "Directory entries",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.object({ name: z.string(), absolute: z.string() }))),
+              },
+            },
+          },
+          400: {
+            description: "Invalid path",
+            content: { "application/json": { schema: resolver(z.object({ error: z.string() })) } },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          directory: z.string(),
+        }),
+      ),
+      async (c) => {
+        const dir = c.req.valid("query").directory
+        try {
+          const entries = await fs.readdir(dir, { withFileTypes: true })
+          const dirs = entries
+            .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+            .map((e) => ({ name: e.name, absolute: path.join(dir, e.name) }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+          return c.json(dirs)
+        } catch {
+          return c.json({ error: "Cannot read directory: " + dir }, 400)
+        }
       },
     ),
 )

@@ -161,15 +161,27 @@ function useDirectorySearch(args: {
     const request = args.sdk.client.file
       .list({ directory: key, path: "" })
       .then((x) => x.data ?? [])
-      .catch(() => [])
-      .then((nodes) =>
-        nodes
-          .filter((n) => n.type === "directory")
-          .map((n) => ({
-            name: n.name,
-            absolute: trimTrailing(normalizeDriveRoot(n.absolute)),
-          })),
-      )
+      .catch(() => null)
+      .then(async (nodes) => {
+        if (nodes) {
+          return nodes
+            .filter((n) => n.type === "directory")
+            .map((n) => ({
+              name: n.name,
+              absolute: trimTrailing(normalizeDriveRoot(n.absolute)),
+            }))
+        }
+        // 实例 API 失败时使用全局 /global/browse API（非项目页面）
+        try {
+          const base = document.baseURI.replace(/\/+$/, "")
+          const url = `${base}/global/browse?directory=${encodeURIComponent(key)}`
+          const res = await fetch(url)
+          if (!res.ok) return [] as { name: string; absolute: string }[]
+          return (await res.json()) as { name: string; absolute: string }[]
+        } catch {
+          return [] as { name: string; absolute: string }[]
+        }
+      })
 
     cache.set(key, request)
     return request
