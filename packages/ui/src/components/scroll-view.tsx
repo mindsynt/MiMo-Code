@@ -105,6 +105,9 @@ export function ScrollView(props: ScrollViewProps) {
 
   let startY = 0
   let startScrollTop = 0
+  let startScrollHeight = 0
+  let startClientHeight = 0
+  let startThumbHeight = 0
 
   const onThumbPointerDown = (e: PointerEvent) => {
     e.preventDefault()
@@ -112,14 +115,16 @@ export function ScrollView(props: ScrollViewProps) {
     setState("isDragging", true)
     startY = e.clientY
     startScrollTop = viewportRef.scrollTop
+    startScrollHeight = viewportRef.scrollHeight
+    startClientHeight = viewportRef.clientHeight
+    startThumbHeight = thumbHeight()
 
     thumbRef.setPointerCapture(e.pointerId)
 
     const onPointerMove = (e: PointerEvent) => {
       const deltaY = e.clientY - startY
-      const { scrollHeight, clientHeight } = viewportRef
-      const maxScrollTop = scrollHeight - clientHeight
-      const maxThumbTop = clientHeight - thumbHeight()
+      const maxScrollTop = startScrollHeight - startClientHeight
+      const maxThumbTop = startClientHeight - startThumbHeight
 
       if (maxThumbTop > 0) {
         const scrollDelta = deltaY * (maxScrollTop / maxThumbTop)

@@ -577,67 +577,139 @@ export function AssistantParts(props: {
 
   const last = createMemo(() => grouped().at(-1)?.key)
 
+  // 将分组结果按 messageID 归类，每个 assistant message 成为一个可折叠的组
+  const messageGroups = createMemo(() => {
+    const result: Array<{ message: AssistantMessage; groups: PartGroup[] }> = []
+    const byMsg = new Map<string, { message: AssistantMessage; groups: PartGroup[] }>()
+
+    for (const msg of props.messages) {
+      const entry = { message: msg, groups: [] as PartGroup[] }
+      byMsg.set(msg.id, entry)
+      result.push(entry)
+    }
+
+    for (const group of grouped()) {
+      let msgId: string | undefined
+      if (group.type === "context") {
+        msgId = group.refs[0]?.messageID
+      } else if (group.type === "part") {
+        msgId = group.ref.messageID
+      }
+      if (msgId && byMsg.has(msgId)) {
+        byMsg.get(msgId)!.groups.push(group)
+      } else if (result.length > 0) {
+        result[result.length - 1]!.groups.push(group)
+      }
+    }
+
+    return result.filter((entry) => entry.groups.length > 0)
+  })
+
+  // 折叠面板状态
+  const [expandedMessages, setExpandedMessages] = createStore<Record<string, boolean>>({})
+
   return (
-    <Index each={grouped()}>
-      {(entryAccessor) => {
-        const entryType = createMemo(() => entryAccessor().type)
+    <Show when={messageGroups().length > 0}>
+      <Index each={messageGroups()}>
+        {(entryAccessor) => {
+          const entry = entryAccessor()
+          const msg = entry.message
+          const agentId = (msg as any).agentID
+          const expanded = () => expandedMessages[msg.id] ?? false
 
-        return (
-          <Switch>
-            <Match when={entryType() === "context"}>
-              {(() => {
-                const parts = createMemo(
-                  () => {
-                    const entry = entryAccessor()
-                    if (entry.type !== "context") return emptyTools
-                    return entry.refs
-                      .map((ref) => part().get(ref.messageID)?.get(ref.partID))
-                      .filter((part): part is ToolPart => !!part && isContextGroupTool(part))
-                  },
-                  emptyTools,
-                  { equals: same },
-                )
-                const busy = createMemo(() => props.working && last() === entryAccessor().key)
+          // 统计工具数量和思考
+          let toolCount = 0
+          let hasReasoning = false
+          for (const g of entry.groups) {
+            if (g.type === "context") {
+              toolCount += g.refs.length
+            } else if (g.type === "part") {
+              const p = part().get(g.ref.messageID)?.get(g.ref.partID)
+              if (p?.type === "tool") toolCount++
+              if (p?.type === "reasoning") hasReasoning = true
+            }
+          }
 
-                return (
-                  <Show when={parts().length > 0}>
-                    <ContextToolGroup parts={parts()} busy={busy()} />
-                  </Show>
-                )
-              })()}
-            </Match>
-            <Match when={entryType() === "part"}>
-              {(() => {
-                const message = createMemo(() => {
-                  const entry = entryAccessor()
-                  if (entry.type !== "part") return
-                  return msgs().get(entry.ref.messageID)
-                })
-                const item = createMemo(() => {
-                  const entry = entryAccessor()
-                  if (entry.type !== "part") return
-                  return part().get(entry.ref.messageID)?.get(entry.ref.partID)
-                })
-
-                return (
-                  <Show when={message()}>
-                    <Show when={item()}>
-                      <Part
-                        part={item()!}
-                        message={message()!}
-                        showAssistantCopyPartID={props.showAssistantCopyPartID}
-                        turnDurationMs={props.turnDurationMs}
-                        defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
-                      />
+          return (
+            <Collapsible
+              open={expanded()}
+              onOpenChange={(v) => setExpandedMessages(msg.id, v)}
+              variant="ghost"
+              class="agent-turn-collapsible"
+            >
+              <Collapsible.Trigger>
+                <div class="flex items-center gap-2 px-3 py-1.5 text-13-medium text-text-weak bg-surface-base hover:bg-surface-base-hover rounded-lg transition-colors w-full border-0 text-left cursor-pointer">
+                  <Icon name="chevron-down" size="small" classList={{ "-rotate-90": !expanded() }} />
+                  <span>
+                    {agentId ?? "agent"}
+                    <Show when={toolCount > 0 || hasReasoning}>
+                      <span class="text-text-weak ml-1">
+                        ({[
+                          toolCount > 0 ? `${toolCount} tools` : "",
+                          hasReasoning ? "thinking" : "",
+                        ].filter(Boolean).join(", ")})
+                      </span>
                     </Show>
-                  </Show>
-                )
-              })()}
-            </Match>
-          </Switch>
-        )
-      }}
-    </Index>
+                  </span>
+                </div>
+              </Collapsible.Trigger>
+              <div class="pt-1">
+                <Index each={entry.groups}>
+                  {(groupAccessor) => {
+                    const groupType = createMemo(() => groupAccessor().type)
+                    return (
+                      <Switch>
+                        <Match when={groupType() === "context"}>
+                          {(() => {
+                            const parts = createMemo(
+                              () => {
+                                const g = groupAccessor()
+                                if (g.type !== "context") return emptyTools
+                                return g.refs
+                                  .map((ref) => part().get(ref.messageID)?.get(ref.partID))
+                                  .filter((part): part is ToolPart => !!part && isContextGroupTool(part))
+                              },
+                              emptyTools,
+                              { equals: same },
+                            )
+                            return (
+                              <Show when={parts().length > 0}>
+                                <ContextToolGroup parts={parts()} />
+                              </Show>
+                            )
+                          })()}
+                        </Match>
+                        <Match when={groupType() === "part"}>
+                          {(() => {
+                            const g = groupAccessor()
+                            if (g.type !== "part") return null
+                            const ref = g.ref
+                            const message = msgs().get(ref.messageID)
+                            const item = part().get(ref.messageID)?.get(ref.partID)
+
+                            return (
+                              <Show when={message && item}>
+                                <Part
+                                  part={item!}
+                                  message={message!}
+                                  showAssistantCopyPartID={props.showAssistantCopyPartID}
+                                  turnDurationMs={props.turnDurationMs}
+                                  defaultOpen={partDefaultOpen(item!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                                />
+                              </Show>
+                            )
+                          })()}
+                        </Match>
+                      </Switch>
+                    )
+                  }}
+                </Index>
+              </div>
+            </Collapsible>
+          )
+        }}
+      </Index>
+    </Show>
   )
 }
 
