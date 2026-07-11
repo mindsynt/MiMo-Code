@@ -653,6 +653,15 @@ export function AssistantParts(props: {
   const [expandedMessages, setExpandedMessages] = createStore<Record<string, boolean>>(
     Object.fromEntries(props.messages.map((m) => [m.id, true])),
   )
+  // 新消息流式加入时自动展开
+  createEffect(() => {
+    const ids = props.messages.map((m) => m.id)
+    setExpandedMessages(produce((draft) => {
+      for (const id of ids) {
+        if (!(id in draft)) draft[id] = true
+      }
+    }))
+  })
   const expandedValues = createMemo(() =>
     Object.entries(expandedMessages)
       .filter(([, v]) => v)
