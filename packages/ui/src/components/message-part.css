@@ -1367,7 +1367,7 @@
 
 /* agent 消息内容区域：超出限制高度后出现滚动条 */
 [data-component="agent-turn-content"] {
-  max-height: 60vh;
+  max-height: 40vh;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
