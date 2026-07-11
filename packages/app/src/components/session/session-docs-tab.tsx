@@ -381,7 +381,43 @@ function DocCategory(props: {
                     </Show>
                   </button>
                   <Show when={isSelected() && isLoaded()}>
-                    <div class="border-t border-border-weaker-base px-4 py-3 bg-background-base">
+                    <div class="border-t border-border-weaker-base px-4 py-3 bg-background-base relative group">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          const text = props.fileContents[file.fullPath]
+                          if (!text) return
+                          const btn = e.currentTarget
+                          navigator.clipboard.writeText(text).catch(() => {})
+                          const copyIcon = btn.querySelector('[data-icon="copy"]') as HTMLElement | null
+                          const checkIcon = btn.querySelector('[data-icon="check"]') as HTMLElement | null
+                          const tooltip = btn.querySelector('[data-slot="copied-tooltip"]') as HTMLElement | null
+                          if (copyIcon) copyIcon.style.display = "none"
+                          if (checkIcon) checkIcon.style.display = ""
+                          if (tooltip) tooltip.style.opacity = "1"
+                          setTimeout(() => {
+                            if (copyIcon) copyIcon.style.display = ""
+                            if (checkIcon) checkIcon.style.display = "none"
+                            if (tooltip) tooltip.style.opacity = "0"
+                          }, 2000)
+                        }}
+                        class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center size-7 rounded-md border border-border-base bg-background-base hover:bg-surface-raised-base-hover text-icon-base cursor-pointer"
+                        aria-label="复制内容"
+                        title="复制内容"
+                      >
+                        <svg class="size-4" data-icon="copy" viewBox="0 0 24 24" fill="none">
+                          <path d="M6.2513 6.24935V2.91602H17.0846V13.7493H13.7513M13.7513 6.24935V17.0827H2.91797V6.24935H13.7513Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <svg class="size-4 hidden" data-icon="check" viewBox="0 0 24 24" fill="none">
+                          <path d="M9 12.75L11.25 15L15 9.75M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span
+                          data-slot="copied-tooltip"
+                          class="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2 py-0.5 rounded bg-surface-strong-base text-text-inverted text-11-medium whitespace-nowrap pointer-events-none opacity-0 transition-opacity"
+                        >
+                          已复制
+                        </span>
+                      </button>
                       <Markdown text={props.fileContents[file.fullPath]} />
                     </div>
                   </Show>
