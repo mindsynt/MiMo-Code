@@ -11,8 +11,6 @@ import {
   IconUserCircle,
   IconCommandLine,
   IconCheckCircle,
-  IconChevronDown,
-  IconChevronRight,
   IconDocumentPlus,
   IconPencilSquare,
   IconRectangleStack,
@@ -25,7 +23,7 @@ import { ContentDiff } from "./content-diff"
 import { ContentText } from "./content-text"
 import { ContentBash } from "./content-bash"
 import { ContentError } from "./content-error"
-import { formatCount, formatDuration, formatNumber, normalizeLocale, useShareMessages } from "../share/common"
+import { formatDuration, formatNumber, normalizeLocale, useShareMessages } from "../share/common"
 import { ContentMarkdown } from "./content-markdown"
 import type { MessageV2 } from "opencode/session/message-v2"
 import type { Diagnostic } from "vscode-languageserver-types"
@@ -159,11 +157,9 @@ export function Part(props: PartProps) {
             </div>
             <Show when={props.part.text}>
               <div data-component="assistant-reasoning">
-                <ResultsButton showCopy={messages.show_details} hideCopy={messages.hide_details}>
-                  <div data-component="assistant-reasoning-markdown">
-                    <ContentMarkdown expand text={props.part.text || messages.thinking_pending} />
-                  </div>
-                </ResultsButton>
+                <div data-component="assistant-reasoning-markdown">
+                  <ContentMarkdown expand text={props.part.text || messages.thinking_pending} />
+                </div>
               </div>
             </Show>
           </div>
@@ -436,16 +432,7 @@ export function GrepTool(props: ToolProps) {
       <div data-component="tool-result">
         <Switch>
           <Match when={props.state.metadata?.matches && props.state.metadata?.matches > 0}>
-            <ResultsButton
-              showCopy={formatCount(
-                props.state.metadata?.matches || 0,
-                messages.locale,
-                messages.match_one,
-                messages.match_other,
-              )}
-            >
-              <ContentText expand compact text={props.state.output} />
-            </ResultsButton>
+            <ContentText expand compact text={props.state.output} />
           </Match>
           <Match when={props.state.output}>
             <ContentText expand compact text={props.state.output} data-size="sm" data-color="dimmed" />
@@ -474,9 +461,7 @@ export function ListTool(props: ToolProps) {
       <div data-component="tool-result">
         <Switch>
           <Match when={props.state.output}>
-            <ResultsButton>
-              <ContentText expand compact text={props.state.output} />
-            </ResultsButton>
+            <ContentText expand compact text={props.state.output} />
           </Match>
         </Switch>
       </div>
@@ -499,9 +484,7 @@ export function WebFetchTool(props: ToolProps) {
             <ContentError>{formatErrorString(props.state.output, messages.error)}</ContentError>
           </Match>
           <Match when={props.state.output}>
-            <ResultsButton>
-              <ContentCode lang={props.state.input.format || "text"} code={props.state.output} />
-            </ResultsButton>
+            <ContentCode lang={props.state.input.format || "text"} code={props.state.output} />
           </Match>
         </Switch>
       </div>
@@ -527,14 +510,10 @@ export function ReadTool(props: ToolProps) {
             <ContentError>{formatErrorString(props.state.output, messages.error)}</ContentError>
           </Match>
           <Match when={typeof props.state.metadata?.preview === "string"}>
-            <ResultsButton showCopy={messages.show_preview} hideCopy={messages.hide_preview}>
-              <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.metadata?.preview} />
-            </ResultsButton>
+            <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.metadata?.preview} />
           </Match>
           <Match when={typeof props.state.metadata?.preview !== "string" && props.state.output}>
-            <ResultsButton>
-              <ContentText expand compact text={props.state.output} />
-            </ResultsButton>
+            <ContentText expand compact text={props.state.output} />
           </Match>
         </Switch>
       </div>
@@ -566,9 +545,7 @@ export function WriteTool(props: ToolProps) {
             <ContentError>{formatErrorString(props.state.output, messages.error)}</ContentError>
           </Match>
           <Match when={props.state.input?.content}>
-            <ResultsButton showCopy={messages.show_contents} hideCopy={messages.hide_contents}>
-              <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.input?.content} />
-            </ResultsButton>
+            <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.input?.content} />
           </Match>
         </Switch>
       </div>
@@ -611,22 +588,15 @@ export function EditTool(props: ToolProps) {
 }
 
 export function BashTool(props: ToolProps) {
-  const messages = useShareMessages()
   return (
     <>
-      <div data-component="tool-title">
-        <span data-slot="name">Shell</span>
-        <Show when={props.state.input.description}>
-          <span data-slot="target">{props.state.input.description}</span>
-        </Show>
-      </div>
-      <ResultsButton showCopy={messages.show_output} hideCopy={messages.hide_output}>
-        <ContentBash
-          command={props.state.input.command}
-          output={props.state.metadata.output ?? props.state.metadata?.stdout}
-          description={props.state.metadata.description}
-        />
-      </ResultsButton>
+      <ContentBash
+        expand
+        command={props.state.input.command}
+        output={props.state.metadata.output ?? props.state.metadata?.stdout}
+        description={props.state.metadata.description}
+      />
+      </Show>
     </>
   )
 }
@@ -643,45 +613,13 @@ export function GlobTool(props: ToolProps) {
       <Switch>
         <Match when={props.state.metadata?.count && props.state.metadata?.count > 0}>
           <div data-component="tool-result">
-            <ResultsButton
-              showCopy={formatCount(
-                props.state.metadata?.count || 0,
-                messages.locale,
-                messages.result_one,
-                messages.result_other,
-              )}
-            >
-              <ContentText expand compact text={props.state.output} />
-            </ResultsButton>
+            <ContentText expand compact text={props.state.output} />
           </div>
         </Match>
         <Match when={props.state.output}>
           <ContentText expand text={props.state.output} data-size="sm" data-color="dimmed" />
         </Match>
       </Switch>
-    </>
-  )
-}
-
-interface ResultsButtonProps extends ParentProps {
-  showCopy?: string
-  hideCopy?: string
-}
-function ResultsButton(props: ResultsButtonProps) {
-  const [show, setShow] = createSignal(false)
-  const messages = useShareMessages()
-
-  return (
-    <>
-      <button type="button" data-component="button-text" data-more onClick={() => setShow((e) => !e)}>
-        <span>{show() ? props.hideCopy || messages.hide_results : props.showCopy || messages.show_results}</span>
-        <span data-slot="icon">
-          <Show when={show()} fallback={<IconChevronRight width={11} height={11} />}>
-            <IconChevronDown width={11} height={11} />
-          </Show>
-        </span>
-      </button>
-      <Show when={show()}>{props.children}</Show>
     </>
   )
 }
@@ -719,11 +657,9 @@ function TaskTool(props: ToolProps) {
         <span data-slot="target">{props.state.input.description}</span>
       </div>
       <div data-component="tool-input">&ldquo;{props.state.input.prompt}&rdquo;</div>
-      <ResultsButton showCopy={messages.show_output} hideCopy={messages.hide_output}>
-        <div data-component="tool-output">
-          <ContentMarkdown expand text={props.state.output} />
-        </div>
-      </ResultsButton>
+      <div data-component="tool-output">
+        <ContentMarkdown expand text={props.state.output} />
+      </div>
     </>
   )
 }
@@ -734,7 +670,6 @@ export function FallbackTool(props: ToolProps) {
       <div data-component="tool-title">
         <span data-slot="name">{props.tool}</span>
       </div>
-      <div data-component="tool-args">
         <For each={flattenToolArgs(props.state.input)}>
           {(arg) => (
             <>
@@ -754,9 +689,7 @@ export function FallbackTool(props: ToolProps) {
       <Switch>
         <Match when={props.state.output}>
           <div data-component="tool-result">
-            <ResultsButton>
-              <ContentText expand compact text={props.state.output} data-size="sm" data-color="dimmed" />
-            </ResultsButton>
+            <ContentText expand compact text={props.state.output} data-size="sm" data-color="dimmed" />
           </div>
         </Match>
       </Switch>

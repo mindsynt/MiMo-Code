@@ -1,7 +1,7 @@
 import { For, Show, onMount, Suspense, onCleanup, createMemo, createSignal, SuspenseList } from "solid-js"
 import { DateTime } from "luxon"
 import { createStore, reconcile } from "solid-js/store"
-import { IconArrowDown } from "./icons"
+import { IconArrowDown, IconArrowRight } from "./icons"
 import { IconOpencode } from "./icons/custom"
 import { ShareI18nProvider, formatCurrency, formatNumber, normalizeLocale } from "./share/common"
 import styles from "./share.module.css"
@@ -77,6 +77,7 @@ export default function Share(props: {
   })
   const messages = createMemo(() => Object.values(store.messages).toSorted((a, b) => a.id?.localeCompare(b.id)))
   const [connectionStatus, setConnectionStatus] = createSignal<[Status, string?]>(["disconnected"])
+  const [expandedMsgs, setExpandedMsgs] = createStore<Record<string, boolean>>({})
 
   onMount(() => {
     const apiUrl = props.api
@@ -347,6 +348,9 @@ export default function Share(props: {
                 <SuspenseList revealOrder="forwards">
                   <For each={data().messages}>
                     {(msg, msgIndex) => {
+                      const msgExpanded = createMemo(() => expandedMsgs[msg.id] !== false)
+                      const toggleMsg = () => setExpandedMsgs(msg.id, !msgExpanded())
+
                       const filteredParts = createMemo(() =>
                         msg.parts.filter((x, index) => {
                           if (x.type === "step-start" && index > 0) return false
@@ -363,6 +367,24 @@ export default function Share(props: {
 
                       return (
                         <Suspense>
+                          <Show when={msg.role === "assistant"}>
+                            <div
+                              class={styles["agent-toggle"]}
+                              role="button"
+                              tabIndex={0}
+                              onClick={toggleMsg}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleMsg() } }}
+                            >
+                              <Show when={msgExpanded()} fallback={<IconArrowRight width={14} height={14} />}>
+                                <IconArrowDown width={14} height={14} />
+                              </Show>
+                              <span>{msg.agent ?? "assistant"}</span>
+                              <Show when={msg.modelID}>
+                                <span class={styles["agent-toggle-model"]}>{msg.modelID}</span>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={msgExpanded() || msg.role !== "assistant"}>
                           <For each={filteredParts()}>
                             {(part, partIndex) => {
                               const last = () =>
@@ -370,7 +392,6 @@ export default function Share(props: {
 
                               onMount(() => {
                                 const hash = window.location.hash.slice(1)
-                                // Wait till all parts are loaded
                                 if (hash !== "" && !hasScrolledToAnchor && last()) {
                                   hasScrolledToAnchor = true
                                   scrollToAnchor(hash)
@@ -380,6 +401,7 @@ export default function Share(props: {
                               return <Part last={last()} part={part} index={partIndex()} message={msg} />
                             }}
                           </For>
+                          </Show>
                         </Suspense>
                       )
                     }}
