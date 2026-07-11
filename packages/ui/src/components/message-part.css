@@ -1364,4 +1364,11 @@
   border-radius: 8px;
   margin: 8px 0 12px;
 }
+
+/* agent 消息内容区域：超出限制高度后出现滚动条 */
+[data-component="agent-turn-content"] {
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 }

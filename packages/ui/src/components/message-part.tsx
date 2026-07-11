@@ -719,7 +719,8 @@ export function AssistantParts(props: {
                 </Accordion.Trigger>
               </StickyAccordionHeader>
               <Accordion.Content>
-                <Index each={entry.groups}>
+                <div data-component="agent-turn-content">
+                  <Index each={entry.groups}>
                   {(groupAccessor) => {
                     const groupType = createMemo(() => groupAccessor().type)
                     return (
@@ -769,6 +770,7 @@ export function AssistantParts(props: {
                     )
                   }}
                 </Index>
+                </div>
               </Accordion.Content>
             </Accordion.Item>
           )
