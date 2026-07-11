@@ -541,7 +541,6 @@ function partDefaultOpen(part: PartType, shell = false, edit = false) {
 
 export function AssistantParts(props: {
   messages: AssistantMessage[]
-  parentParts?: PartType[]
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
   working?: boolean
