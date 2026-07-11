@@ -1332,11 +1332,36 @@
 [data-component="collapsible"].tool-collapsible {
   margin: 4px 0;
   border: 1px solid var(--border-weaker-base);
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
     border-color: var(--border-weak-base);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
+}
+
+/* 标签徽章微调 */
+[data-component="accordion"] [data-slot="accordion-trigger"] .shrink-0.text-12-medium {
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+/* 内联代码在文本中更清晰 */
+[data-slot="accordion-content"] [data-component="text-part"] [data-component="markdown"] :not(pre) > code {
+  font-size: 0.875em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: var(--surface-weak);
+  border: 1px solid var(--border-weaker-base);
+  color: var(--text-strong);
+}
+
+/* markdown 块级代码区域 */
+[data-slot="accordion-content"] [data-component="text-part"] [data-component="markdown"] pre {
+  border: 1px solid var(--border-weaker-base);
+  border-radius: 8px;
+  margin: 8px 0 12px;
+}
 }
