@@ -155,6 +155,7 @@ export function SessionTurn(
     active?: boolean
     status?: SessionStatus
     onUserInteracted?: () => void
+    loadedInstructionFiles?: string[]
     classes?: {
       root?: string
       content?: string
@@ -427,9 +428,11 @@ export function SessionTurn(
                 <div data-slot="session-turn-thinking">
                   <TextShimmer
                     text={
-                      pendingModelName()
-                        ? i18n.t("ui.sessionTurn.status.thinkingWithTopic", { topic: pendingModelName() })
-                        : i18n.t("ui.sessionTurn.status.thinking")
+                      props.loadedInstructionFiles && props.loadedInstructionFiles.length > 0
+                        ? i18n.t("ui.sessionTurn.status.thinkingWithTopic", { topic: props.loadedInstructionFiles.join(", ") })
+                        : pendingModelName()
+                          ? i18n.t("ui.sessionTurn.status.thinkingWithTopic", { topic: pendingModelName() })
+                          : i18n.t("ui.sessionTurn.status.thinking")
                     }
                   />
                   <Show when={!showReasoningSummaries()}>

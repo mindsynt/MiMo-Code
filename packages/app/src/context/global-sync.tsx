@@ -28,6 +28,9 @@ import { sanitizeProject } from "./global-sync/utils"
 import { formatServerError } from "@/utils/server-errors"
 import { queryOptions, skipToken, useQueryClient } from "@tanstack/solid-query"
 
+// 存储当前会话加载的指令文件路径
+const [loadedInstructionFiles, setLoadedInstructionFiles] = createStore<string[]>([])
+
 type GlobalStore = {
   ready: boolean
   error?: InitError
@@ -296,6 +299,11 @@ function createGlobalSync() {
     const recent = bootingRoot || Date.now() - bootedAt < 1500
 
     if (directory === "global") {
+      if (event.type === "tui.instructions.loaded") {
+        const props = event.properties as { files: string[] }
+        if (props?.files) setLoadedInstructionFiles(props.files)
+        return
+      }
       applyGlobalEvent({
         event,
         project: globalStore.project,
@@ -440,4 +448,9 @@ export function useGlobalSync() {
   const context = useContext(GlobalSyncContext)
   if (!context) throw new Error("useGlobalSync must be used within GlobalSyncProvider")
   return context
+}
+
+/** 当前加载的指令文件路径列表（由 tui.instructions.loaded 事件更新） */
+export function useLoadedInstructionFiles() {
+  return loadedInstructionFiles
 }
