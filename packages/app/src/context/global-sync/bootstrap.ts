@@ -73,6 +73,7 @@ export async function bootstrapGlobal(input: {
   formatMoreCount: (count: number) => string
   setGlobalStore: SetStoreFunction<GlobalStore>
   queryClient: QueryClient
+  cachedProjects?: Project[]  // 本地缓存的额外项目（服务端可能没有）
 }) {
   const fast = [
     () =>
@@ -109,7 +110,15 @@ export async function bootstrapGlobal(input: {
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
-          input.setGlobalStore("project", projects)
+          // 合并本地缓存中服务端没有的项目（如本地首次打开的新项目）
+          const merged = input.cachedProjects?.reduce(
+            (acc, cached) => {
+              if (!acc.find((p) => p.worktree === cached.worktree)) acc.push(cached)
+              return acc
+            },
+            projects.slice(),
+          ) ?? projects
+          input.setGlobalStore("project", merged)
         }),
       ),
   ]

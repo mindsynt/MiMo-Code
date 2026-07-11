@@ -8,13 +8,22 @@ export async function loadRootSessionsWithFallback(input: RootLoadArgs) {
       limit: input.limit,
       limited: true,
     } as const
-  } catch {
-    const result = await input.list({ directory: input.directory, roots: true })
-    return {
-      data: result.data,
-      limit: input.limit,
-      limited: false,
-    } as const
+  } catch (error) {
+    try {
+      const result = await input.list({ directory: input.directory, roots: true })
+      return {
+        data: result.data,
+        limit: input.limit,
+        limited: false,
+      } as const
+    } catch {
+      console.warn("Failed to load sessions with fallback as well", error)
+      return {
+        data: [],
+        limit: input.limit,
+        limited: false,
+      } as const
+    }
   }
 }
 

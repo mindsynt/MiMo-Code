@@ -5,10 +5,6 @@ import { AppRuntime } from "@/effect/app-runtime"
 import { AppFileSystem } from "@mimo-ai/shared/filesystem"
 import { WorkspaceContext } from "@/control-plane/workspace-context"
 import { WorkspaceID } from "@/control-plane/schema"
-import { Flag } from "@/flag/flag"
-import { Filesystem } from "@/util"
-import { Global } from "@/global"
-import path from "node:path"
 
 export function InstanceMiddleware(workspaceID?: WorkspaceID): MiddlewareHandler {
   return async (c, next) => {
@@ -22,23 +18,6 @@ export function InstanceMiddleware(workspaceID?: WorkspaceID): MiddlewareHandler
         }
       })(),
     )
-
-    if (!Flag.MIMOCODE_SERVER_PASSWORD) {
-      const cwd = Filesystem.resolve(process.cwd())
-      // The fixed global Orchestrator workspace is app-owned (under Global.Path.data),
-      // not user-supplied, so entering Orchestrator mode may switch to it even though
-      // it lives outside the server's cwd. Allow it explicitly — but only when the
-      // Orchestrator feature is enabled (otherwise no escape hatch exists).
-      const orchestrator =
-        Flag.MIMOCODE_EXPERIMENTAL_ORCHESTRATOR
-          ? Filesystem.resolve(path.join(Global.Path.data, "orchestrator"))
-          : undefined
-      const childWithinParent = Filesystem.contains(cwd, directory)
-      const parentWithinChild = Filesystem.contains(directory, cwd)
-      if (!childWithinParent && !parentWithinChild && directory !== orchestrator) {
-        return c.json({ error: "Access denied: directory must be within the server's working directory" }, 403)
-      }
-    }
 
     return WorkspaceContext.provide({
       workspaceID,

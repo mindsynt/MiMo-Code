@@ -357,6 +357,7 @@ function createGlobalSync() {
         formatMoreCount: (count) => language.t("common.moreCountSuffix", { count }),
         setGlobalStore: setBootStore,
         queryClient,
+        cachedProjects: projectCache.value,
       })
       bootedAt = Date.now()
     } finally {

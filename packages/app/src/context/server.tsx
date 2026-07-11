@@ -290,7 +290,12 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
         last() {
           const key = origin()
           if (!key) return
-          return store.lastProject[key]
+          const last = store.lastProject[key]
+          if (!last) return
+          // 关闭项目后不清 lastProject，在此校验项目是否还在列表中
+          const current = store.projects[key] ?? []
+          if (!current.find((x) => x.worktree === last)) return
+          return last
         },
         touch(directory: string) {
           const key = origin()

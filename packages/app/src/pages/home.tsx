@@ -13,6 +13,7 @@ import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useServer } from "@/context/server"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
+import type { Project } from "@mimo-ai/sdk/v2/client"
 
 export default function Home() {
   const sync = useGlobalSync()
@@ -40,6 +41,13 @@ export default function Home() {
   function openProject(directory: string) {
     layout.projects.open(directory)
     server.projects.touch(directory)
+    // 同步更新最近项目列表
+    if (!sync.data.project.find((p) => p.worktree === directory)) {
+      sync.set("project", (prev: Project[]) => [
+        { id: directory, worktree: directory, time: { created: Date.now(), updated: Date.now() }, sandboxes: [] },
+        ...prev,
+      ])
+    }
     navigate(`/${base64Encode(directory)}`)
   }
 

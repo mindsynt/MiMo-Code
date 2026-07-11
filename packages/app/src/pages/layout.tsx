@@ -17,6 +17,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
+import type { Project } from "@mimo-ai/sdk/v2/client"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@mimo-ai/shared/util/encode"
 import { decode64 } from "@/utils/base64"
@@ -1279,6 +1280,11 @@ export default function Layout(props: ParentProps) {
     if (!directory) return
     const root = projectRoot(directory)
     server.projects.touch(root)
+    // 同步更新最近项目列表
+    globalSync.set("project", (prev: Project[]) => {
+      if (prev.find((p) => p.worktree === root)) return prev
+      return [{ id: root, worktree: root, time: { created: Date.now(), updated: Date.now() }, sandboxes: [] }, ...prev]
+    })
     const project = layout.projects.list().find((item) => item.worktree === root)
     let dirs = project
       ? effectiveWorkspaceOrder(root, [root, ...(project.sandboxes ?? [])], store.workspaceOrder[root])

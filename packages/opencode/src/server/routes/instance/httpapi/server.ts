@@ -85,12 +85,6 @@ const auth = Layer.succeed(
   }),
 )
 
-class DirectoryAccessDenied extends Schema.TaggedErrorClass<DirectoryAccessDenied>()(
-  "DirectoryAccessDenied",
-  { message: Schema.String },
-  { httpApiStatus: 403 },
-) {}
-
 const instance = HttpRouter.middleware()(
   Effect.gen(function* () {
     return (effect) =>
@@ -100,17 +94,6 @@ const instance = HttpRouter.middleware()(
         const raw = query.directory || headers["x-mimocode-directory"] || process.cwd()
         const workspace = query.workspace || undefined
         const directory = Filesystem.resolve(decode(raw))
-
-        if (!Flag.MIMOCODE_SERVER_PASSWORD) {
-          const cwd = Filesystem.resolve(process.cwd())
-          const childWithinParent = Filesystem.contains(cwd, directory)
-          const parentWithinChild = Filesystem.contains(directory, cwd)
-          if (!childWithinParent && !parentWithinChild) {
-            return yield* new DirectoryAccessDenied({
-              message: "Access denied: directory must be within the server's working directory",
-            })
-          }
-        }
 
         const ctx = yield* Effect.promise(() =>
           Instance.provide({
