@@ -53,7 +53,8 @@ describe("app session cache", () => {
 
     expect(store.message.ses_1).toBeUndefined()
     expect(store.part.msg_1).toBeUndefined()
-    expect(store.todo.ses_1).toBeUndefined()
+    // todo 数据在 dropSessionCaches 中不清理（由 cleanupSessionCaches 单独处理归档会话）
+    expect(store.todo.ses_1).toEqual([])
     expect(store.session_diff.ses_1).toBeUndefined()
     expect(store.session_status.ses_1).toBeUndefined()
     expect(store.permission.ses_1).toBeUndefined()

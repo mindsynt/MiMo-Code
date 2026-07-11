@@ -57,6 +57,8 @@ function cleanupSessionCaches(
   setStore(
     produce((draft) => {
       dropSessionCaches(draft, [sessionID])
+      // 归档 session 需要清理 todo 数据（与裁剪不同，归档表示会话已结束）
+      delete draft.todo[sessionID]
     }),
   )
 }
@@ -71,7 +73,6 @@ export function cleanupDroppedSessionCaches(
   const stale = [
     ...Object.keys(store.message),
     ...Object.keys(store.session_diff),
-    ...Object.keys(store.todo),
     ...Object.keys(store.permission),
     ...Object.keys(store.question),
     ...Object.keys(store.session_status),
@@ -80,9 +81,6 @@ export function cleanupDroppedSessionCaches(
       .filter((sessionID): sessionID is string => !!sessionID),
   ].filter((sessionID, index, list) => !keep.has(sessionID) && list.indexOf(sessionID) === index)
   if (stale.length === 0) return
-  for (const sessionID of stale) {
-    setSessionTodo?.(sessionID, undefined)
-  }
   setStore(
     produce((draft) => {
       dropSessionCaches(draft, stale)

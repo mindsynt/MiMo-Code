@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createMemo, onCleanup, type JSX } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Tabs } from "@mimo-ai/ui/tabs"
@@ -159,6 +159,7 @@ export function SessionSidePanel(props: {
   const [store, setStore] = createStore({
     activeDraggable: undefined as string | undefined,
   })
+  const [docCount, setDocCount] = createSignal(0)
 
   const handleDragStart = (event: unknown) => {
     const id = getDraggableId(event)
@@ -283,6 +284,9 @@ export function SessionSidePanel(props: {
                       <Tabs.Trigger value="docs">
                         <div class="flex items-center gap-1.5">
                           <div>{language.t("session.tab.docs")}</div>
+                          <Show when={docCount() > 0}>
+                            <span class="text-11-regular text-text-interactive-base ml-0.5">{docCount()}</span>
+                          </Show>
                         </div>
                       </Tabs.Trigger>
                       <Tabs.Trigger value="tasks">
@@ -346,11 +350,9 @@ export function SessionSidePanel(props: {
                   </Show>
 
                   <Tabs.Content value="docs" class="flex flex-col h-full overflow-hidden contain-strict">
-                    <Show when={activeTab() === "docs"}>
-                      <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
-                        <SessionDocsTab />
-                      </div>
-                    </Show>
+                    <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                      <SessionDocsTab onCount={setDocCount} />
+                    </div>
                   </Tabs.Content>
 
                   <Tabs.Content value="tasks" class="flex flex-col h-full overflow-hidden contain-strict">

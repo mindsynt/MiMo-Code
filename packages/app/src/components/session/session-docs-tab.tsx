@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useSDK } from "@/context/sdk"
 import { useGlobalSync } from "@/context/global-sync"
@@ -6,12 +6,6 @@ import { useLanguage } from "@/context/language"
 import { Markdown } from "@mimo-ai/ui/markdown"
 import { ScrollView } from "@mimo-ai/ui/scroll-view"
 import { Icon } from "@mimo-ai/ui/icon"
-
-type DocFile = {
-  name: string
-  fullPath: string
-  mtime?: number
-}
 
 type GlobalFileEntry = {
   name: string
@@ -118,12 +112,26 @@ async function fetchFromDirs(
   return merged
 }
 
-type DocCategory = {
+type DocCategoryConfig = {
   labelKey: string
   dirs: DirConfig[]
 }
 
-export function SessionDocsTab() {
+export type { DocCategoryConfig }
+
+/**
+ * 扫描所有分类并返回文件总数（用于徽章计数）
+ */
+function totalCount(resources: { data: GlobalFileEntry[] | undefined }[]): number {
+  const seen = new Set<string>()
+  for (const r of resources) {
+    if (!r.data) continue
+    for (const f of r.data) seen.add(f.fullPath)
+  }
+  return seen.size
+}
+
+export function SessionDocsTab(props: { onCount?: (count: number) => void }) {
   const sdk = useSDK()
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
@@ -131,11 +139,13 @@ export function SessionDocsTab() {
   const dir = () => sdk.directory
   const baseUrl = () => document.baseURI.replace(/\/+$/, "")
 
-  // Polling signal for real-time refresh
+  // Polling signal for real-time refresh — 10s interval for near-real-time feel
   const [tick, setTick] = createSignal(0)
-  const pollInterval = 30_000 // 30 seconds
+  const pollInterval = 10_000 // 10 seconds
 
   onMount(() => {
+    // 立即触发首次加载
+    setTick(1)
     const interval = setInterval(() => setTick((t) => t + 1), pollInterval)
     onCleanup(() => clearInterval(interval))
   })
@@ -147,18 +157,41 @@ export function SessionDocsTab() {
   const globalDataDir = () => globalSync.data.path.data || ""
   const serverBase = baseUrl()
 
-  // Build categories with both project-level and global-level dirs for plans
-  const categories = (): DocCategory[] => [
+  // 扫描多种目录路径，覆盖不同项目的文件组织习惯
+  // 分类配置：每类扫描多个可能的目录，只要有文件就显示
+  const categories = (): DocCategoryConfig[] => [
     {
       labelKey: "session.docs.plans",
       dirs: [
         { type: "project", path: "docs/compose/plans" },
+        { type: "project", path: "docs/plans" },
+        { type: "project", path: "doc/plans" },
         { type: "project", path: ".mimocode/plans" },
         ...(globalDataDir() ? [{ type: "global" as const, path: `${globalDataDir()}/plans` }] : []),
       ],
     },
-    { labelKey: "session.docs.specs", dirs: [{ type: "project", path: "docs/compose/specs" }] },
-    { labelKey: "session.docs.reports", dirs: [{ type: "project", path: "docs/compose/reports" }] },
+    {
+      labelKey: "session.docs.specs",
+      dirs: [
+        { type: "project", path: "docs/compose/specs" },
+        { type: "project", path: "docs/compose/designs" },
+        { type: "project", path: "docs/specs" },
+        { type: "project", path: "docs/designs" },
+        { type: "project", path: "doc/specs" },
+        { type: "project", path: "doc/designs" },
+        ...(globalDataDir() ? [{ type: "global" as const, path: `${globalDataDir()}/specs` }] : []),
+        ...(globalDataDir() ? [{ type: "global" as const, path: `${globalDataDir()}/designs` }] : []),
+      ],
+    },
+    {
+      labelKey: "session.docs.reports",
+      dirs: [
+        { type: "project", path: "docs/compose/reports" },
+        { type: "project", path: "docs/reports" },
+        { type: "project", path: "doc/reports" },
+        ...(globalDataDir() ? [{ type: "global" as const, path: `${globalDataDir()}/reports` }] : []),
+      ],
+    },
   ]
 
   const [planData] = createResource(
@@ -166,13 +199,23 @@ export function SessionDocsTab() {
     ([d]) => fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: categories()[0].dirs }),
   )
   const [specData] = createResource(
-    () => [dir(), tick()] as const,
+    () => [dir(), globalDataDir(), tick()] as const,
     ([d]) => fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: categories()[1].dirs }),
   )
   const [reportData] = createResource(
-    () => [dir(), tick()] as const,
+    () => [dir(), globalDataDir(), tick()] as const,
     ([d]) => fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: categories()[2].dirs }),
   )
+
+  // 数据更新后向父组件报告总数（用于标签徽章）
+  createEffect(() => {
+    const count = totalCount([
+      { data: planData() },
+      { data: specData() },
+      { data: reportData() },
+    ])
+    props.onCount?.(count)
+  })
 
   const handleSelect = async (fullPath: string) => {
     if (selectedFile() === fullPath) {

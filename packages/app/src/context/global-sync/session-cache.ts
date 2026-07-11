@@ -32,7 +32,8 @@ export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<stri
 
   for (const sessionID of stale) {
     delete store.message[sessionID]
-    delete store.todo[sessionID]
+    // 保留 todo 数据：当 session 因裁剪而被清除时，其任务仍应在任务标签中显示，
+    // 不应被自动删除。只有 session 被归档时才需要通过 cleanupSessionCaches 清理。
     delete store.session_diff[sessionID]
     delete store.session_status[sessionID]
     delete store.permission[sessionID]
