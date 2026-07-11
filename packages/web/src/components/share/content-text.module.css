@@ -26,11 +26,12 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
     overflow: hidden;
+  }
 
-    [data-expanded] & {
-      display: block;
-      overflow: visible;
-    }
+  [data-slot="text"][data-expanded] {
+    display: block;
+    overflow: visible;
+  }
   }
 
   [data-slot="expand-button"] {

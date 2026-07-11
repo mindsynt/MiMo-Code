@@ -17,11 +17,12 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
     overflow: hidden;
+  }
 
-    [data-expanded] & {
-      display: block;
-      overflow: visible;
-    }
+  [data-slot="markdown"][data-expanded] {
+    display: block;
+    overflow: visible;
+  }
 
     font-size: 1em;
     line-height: 1.5;
