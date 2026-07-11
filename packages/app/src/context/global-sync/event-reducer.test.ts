@@ -195,7 +195,8 @@ describe("applyDirectoryEvent", () => {
     expect(store.message.ses_1).toBeUndefined()
     expect(store.part[message.id]).toBeUndefined()
     expect(store.session_diff.ses_1).toBeUndefined()
-    expect(store.todo.ses_1).toBeUndefined()
+    // todo 在 session 裁剪时保留（仅归档会话才清理）
+    expect(store.todo.ses_1).toEqual([])
     expect(store.permission.ses_1).toBeUndefined()
     expect(store.question.ses_1).toBeUndefined()
     expect(store.session_status.ses_1).toBeUndefined()
@@ -284,11 +285,13 @@ describe("applyDirectoryEvent", () => {
     expect(store.message[dropped.id]).toBeUndefined()
     expect(store.part[message.id]).toBeUndefined()
     expect(store.session_diff[dropped.id]).toBeUndefined()
-    expect(store.todo[dropped.id]).toBeUndefined()
+    // todo 在 session 裁剪时保留（仅归档会话才清理）
+    expect(store.todo[dropped.id]).toEqual([])
     expect(store.permission[dropped.id]).toBeUndefined()
     expect(store.question[dropped.id]).toBeUndefined()
     expect(store.session_status[dropped.id]).toBeUndefined()
-    expect(todos).toEqual([dropped.id])
+    // 裁剪不再触发 setSessionTodo（todo 保留）
+    expect(todos).toEqual([])
   })
 
   test("cleanupDroppedSessionCaches clears part-only orphan state", () => {
