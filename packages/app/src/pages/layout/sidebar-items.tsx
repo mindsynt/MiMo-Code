@@ -6,7 +6,7 @@ import { Spinner } from "@mimo-ai/ui/spinner"
 import { Tooltip } from "@mimo-ai/ui/tooltip"
 import { getFilename } from "@mimo-ai/shared/util/path"
 import { A, useParams } from "@solidjs/router"
-import { createEffect, createMemo, For, type Accessor, type JSX, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, type Accessor, type JSX, Match, Show, Switch } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
@@ -56,8 +56,22 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
       return hasProjectPermissions(store.permission, (item) => !permission.autoResponds(item, directory))
     }),
   )
+
+  // 跟踪任务从工作中到完成的状态切换
+  const [recentlyCompleted, setRecentlyCompleted] = createSignal(false)
+  let prevWorking = false
+  createEffect(() => {
+    const working = isAnyWorking()
+    if (prevWorking && !working) {
+      setRecentlyCompleted(true)
+      setTimeout(() => setRecentlyCompleted(false), 8000)
+    }
+    prevWorking = working
+  })
+
   const notify = createMemo(() => {
     if (isAnyWorking()) return true
+    if (recentlyCompleted()) return true
     return props.notify && (hasPermissions() || unseenCount() > 0)
   })
   const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
@@ -83,6 +97,9 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
             <div class="absolute top-px right-px z-10 flex items-center justify-center">
               <Spinner class="size-3" style={{ color: workingTint() ?? "var(--icon-interactive-base)" }} />
             </div>
+          </Match>
+          <Match when={recentlyCompleted()}>
+            <div class="absolute top-px right-px size-1.5 rounded-full z-10 bg-icon-success-base" />
           </Match>
           <Match when={true}>
             <div

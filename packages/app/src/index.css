@@ -57,8 +57,11 @@
   right: 0;
   height: 2px;
   z-index: 30;
-  background: var(--surface-interactive-base);
   transform-origin: left;
+}
+
+[data-component="session-progress"][data-state="showing"] {
+  background: var(--surface-interactive-base);
   animation: session-progress-whip 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
