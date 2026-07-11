@@ -169,7 +169,7 @@ export function createChildStoreManager(input: {
             config: {},
             get path() {
               if (pathQuery.isLoading || !pathQuery.data)
-                return { state: "", config: "", worktree: "", directory: "", home: "" }
+                return { state: "", config: "", data: "", worktree: "", directory: "", home: "" }
               return pathQuery.data
             },
             status: "loading" as const,
@@ -190,6 +190,7 @@ export function createChildStoreManager(input: {
             limit: 5,
             message: {},
             part: {},
+            loadedInstructionFiles: [],
           })
           children[directory] = child
           disposers.set(directory, dispose)

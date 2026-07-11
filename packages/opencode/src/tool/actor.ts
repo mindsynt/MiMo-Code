@@ -466,26 +466,61 @@ export const ActorTool = Tool.define(
         limit: z.number().int().positive().optional().describe("(optional) Max number of models to return. Default 50."),
       })
 
-      const parameters = z.strictObject({
-        // .meta({ type: "object" }) is REQUIRED — without it the emitted JSON
-        // schema's `operation` node has only `anyOf`, no `type`, and some models
-        // (notably mimo-v2.5-pro) stringify the whole envelope
-        // ({"operation":"{\"action\":\"run\",...}"}) which fails zod validation.
-        // The root strictObject also means flattenDiscriminatedUnion finds no
-        // root-level union and passes through unchanged — root keeps exactly one
-        // key (`operation`), so models can't drop the discriminator.
-        operation: z
-          .discriminatedUnion("action", [
-            runSchema,
-            spawnSchema,
-            statusSchema,
-            waitSchema,
-            cancelSchema,
-            sendSchema,
-            modelsSchema,
-          ])
-          .meta({ type: "object" }),
-      })
+      const parameters = z.preprocess(
+        // 修复：部分模型会将 operation 序列化为 JSON 字符串，或把 subagent_type
+        // 等字段展开到顶层而非嵌套在 operation 内。预处理阶段恢复为正确结构。
+        (raw) => {
+          if (!raw || typeof raw !== "object") return raw
+          const obj = { ...raw as Record<string, unknown> }
+
+          // 情况 1：operation 被序列化为 JSON 字符串
+          if (typeof obj.operation === "string") {
+            try { obj.operation = JSON.parse(obj.operation) } catch {}
+          }
+
+          // 情况 2：模型将字段展开到顶层，缺少 operation 包装
+          if (!obj.operation || typeof obj.operation !== "object") {
+            const subagent_type = obj.subagent_type
+            const description = obj.description
+            const prompt = obj.prompt
+            if (typeof subagent_type === "string" && typeof description === "string" && typeof prompt === "string") {
+              const action = inferAction(obj)
+              const op: Record<string, unknown> = { action, subagent_type, description, prompt }
+              // 携带可选字段
+              if (typeof obj.model === "string") op.model = obj.model
+              if (typeof obj.task_id === "string") op.task_id = obj.task_id
+              if (typeof obj.actor_id === "string") op.actor_id = obj.actor_id
+              if (typeof obj.timeout_ms === "number") op.timeout_ms = obj.timeout_ms
+              if (typeof obj.command === "string") op.command = obj.command
+              if (typeof obj.context === "string") op.context = obj.context
+              if (obj.output_schema && typeof obj.output_schema === "object") op.output_schema = obj.output_schema
+              obj.operation = op
+            }
+          }
+
+          return obj
+        },
+        z.strictObject({
+          // .meta({ type: "object" }) is REQUIRED — without it the emitted JSON
+          // schema's `operation` node has only `anyOf`, no `type`, and some models
+          // (notably mimo-v2.5-pro) stringify the whole envelope
+          // ({"operation":"{\"action\":\"run\",...}"}) which fails zod validation.
+          // The root strictObject also means flattenDiscriminatedUnion finds no
+          // root-level union and passes through unchanged — root keeps exactly one
+          // key (`operation`), so models can't drop the discriminator.
+          operation: z
+            .discriminatedUnion("action", [
+              runSchema,
+              spawnSchema,
+              statusSchema,
+              waitSchema,
+              cancelSchema,
+              sendSchema,
+              modelsSchema,
+            ])
+            .meta({ type: "object" }),
+        }),
+      )
 
       const run = Effect.fn("ActorTool.execute")(function* (input: z.infer<typeof parameters>, ctx: Tool.Context) {
         const op = input.operation

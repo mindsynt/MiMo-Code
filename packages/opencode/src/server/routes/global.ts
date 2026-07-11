@@ -406,5 +406,97 @@ export const GlobalRoutes = lazy(() =>
           return c.json({ error: "Cannot read directory: " + dir }, 400)
         }
       },
+    )
+    .get(
+      "/files",
+      describeRoute({
+        summary: "List files globally",
+        description: "List all files (markdown files for docs) in an absolute directory path, including modification time.",
+        operationId: "global.files",
+        responses: {
+          200: {
+            description: "File entries",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.object({ name: z.string(), absolute: z.string(), mtime: z.number().optional() }))),
+              },
+            },
+          },
+          400: {
+            description: "Invalid path",
+            content: { "application/json": { schema: resolver(z.object({ error: z.string() })) } },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          path: z.string(),
+        }),
+      ),
+      async (c) => {
+        const dirPath = c.req.valid("query").path
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true })
+          const files = await Promise.all(
+            entries
+              .filter((e) => e.isFile() && e.name.endsWith(".md"))
+              .map(async (e) => {
+                const absolute = path.join(dirPath, e.name)
+                let mtime: number | undefined
+                try {
+                  const stat = await fs.stat(absolute)
+                  mtime = stat.mtimeMs
+                } catch {}
+                return { name: e.name, absolute, mtime }
+              }),
+          )
+          return c.json(files.sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0)))
+        } catch {
+          return c.json({ error: "Cannot read directory: " + dirPath }, 400)
+        }
+      },
+    )
+    .get(
+      "/file/content",
+      describeRoute({
+        summary: "Read file content globally",
+        description: "Read the content of a file at an absolute path.",
+        operationId: "global.file.content",
+        responses: {
+          200: {
+            description: "File content",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ content: z.string(), mtime: z.number().optional() })),
+              },
+            },
+          },
+          400: {
+            description: "Invalid path",
+            content: { "application/json": { schema: resolver(z.object({ error: z.string() })) } },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          path: z.string(),
+        }),
+      ),
+      async (c) => {
+        const filePath = c.req.valid("query").path
+        try {
+          const content = await fs.readFile(filePath, "utf-8")
+          let mtime: number | undefined
+          try {
+            const stat = await fs.stat(filePath)
+            mtime = stat.mtimeMs
+          } catch {}
+          return c.json({ content, mtime })
+        } catch {
+          return c.json({ error: "Cannot read file: " + filePath }, 400)
+        }
+      },
     ),
 )

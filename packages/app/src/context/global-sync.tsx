@@ -27,9 +27,7 @@ import { SESSION_RECENT_LIMIT } from "./global-sync/types"
 import { sanitizeProject } from "./global-sync/utils"
 import { formatServerError } from "@/utils/server-errors"
 import { queryOptions, skipToken, useQueryClient } from "@tanstack/solid-query"
-
-// 存储当前会话加载的指令文件路径
-const [loadedInstructionFiles, setLoadedInstructionFiles] = createStore<string[]>([])
+import { useSync } from "./sync"
 
 type GlobalStore = {
   ready: boolean
@@ -66,7 +64,7 @@ function createGlobalSync() {
 
   const [globalStore, setGlobalStore] = createStore<GlobalStore>({
     ready: false,
-    path: { state: "", config: "", worktree: "", directory: "", home: "" },
+    path: { state: "", config: "", data: "", worktree: "", directory: "", home: "" },
     project: projectCache.value,
     session_todo: {},
     provider: { all: [], connected: [], default: {} },
@@ -299,11 +297,6 @@ function createGlobalSync() {
     const recent = bootingRoot || Date.now() - bootedAt < 1500
 
     if (directory === "global") {
-      if (event.type === "tui.instructions.loaded") {
-        const props = event.properties as { files: string[] }
-        if (props?.files) setLoadedInstructionFiles(props.files)
-        return
-      }
       applyGlobalEvent({
         event,
         project: globalStore.project,
@@ -452,5 +445,6 @@ export function useGlobalSync() {
 
 /** 当前加载的指令文件路径列表（由 tui.instructions.loaded 事件更新） */
 export function useLoadedInstructionFiles() {
-  return loadedInstructionFiles
+  const sync = useSync()
+  return sync.data.loadedInstructionFiles ?? []
 }

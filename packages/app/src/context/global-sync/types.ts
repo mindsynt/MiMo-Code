@@ -72,6 +72,7 @@ export type State = {
   part: {
     [messageID: string]: Part[]
   }
+  loadedInstructionFiles: string[]
 }
 
 export type VcsCache = {

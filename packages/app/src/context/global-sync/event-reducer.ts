@@ -360,5 +360,10 @@ export function applyDirectoryEvent(input: {
       input.loadLsp()
       break
     }
+    case "tui.instructions.loaded": {
+      const props = event.properties as { files: string[] }
+      if (props?.files) input.setStore("loadedInstructionFiles", props.files)
+      break
+    }
   }
 }

@@ -541,6 +541,22 @@ export const dict = {
   "session.tab.session": "Session",
   "session.tab.review": "Review",
   "session.tab.context": "Context",
+  "session.tab.docs": "Docs",
+  "session.tab.tasks": "Tasks",
+
+  "session.docs.plans": "Plans",
+  "session.docs.specs": "Specs",
+  "session.docs.reports": "Reports",
+  "session.docs.empty": "(empty)",
+  "session.docs.loading": "Loading...",
+  "session.docs.loadingFile": "loading...",
+
+  "session.tasks.empty": "No tasks",
+  "session.tasks.status.pending": "Pending",
+  "session.tasks.status.in_progress": "In Progress",
+  "session.tasks.status.completed": "Completed",
+  "session.tasks.status.cancelled": "Cancelled",
+
   "session.panel.reviewAndFiles": "Review and files",
   "session.review.filesChanged": "{{count}} Files Changed",
   "session.review.change.one": "Change",

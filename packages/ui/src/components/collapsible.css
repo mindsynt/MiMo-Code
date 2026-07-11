@@ -11,6 +11,7 @@
   &.tool-collapsible {
     --tool-content-gap: 4px;
     gap: var(--tool-content-gap);
+    padding-left: 8px;
   }
 
   [data-slot="collapsible-trigger"] {

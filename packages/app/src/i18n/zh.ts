@@ -516,6 +516,22 @@ export const dict = {
   "session.tab.session": "会话",
   "session.tab.review": "审查",
   "session.tab.context": "上下文",
+  "session.tab.docs": "文档",
+  "session.tab.tasks": "任务",
+
+  "session.docs.plans": "计划",
+  "session.docs.specs": "设计",
+  "session.docs.reports": "报告",
+  "session.docs.empty": "（空）",
+  "session.docs.loading": "加载中...",
+  "session.docs.loadingFile": "加载中...",
+
+  "session.tasks.empty": "暂无任务",
+  "session.tasks.status.pending": "待处理",
+  "session.tasks.status.in_progress": "进行中",
+  "session.tasks.status.completed": "已完成",
+  "session.tasks.status.cancelled": "已取消",
+
   "session.panel.reviewAndFiles": "审查和文件",
   "session.review.filesChanged": "{{count}} 个文件变更",
   "session.review.change.one": "更改",

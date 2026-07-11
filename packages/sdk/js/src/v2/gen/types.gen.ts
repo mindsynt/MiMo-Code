@@ -2677,6 +2677,7 @@ export type FileNode = {
   absolute: string
   type: "file" | "directory"
   ignored: boolean
+  mtime?: number
 }
 
 export type FileContent = {
@@ -2822,6 +2823,7 @@ export type Path = {
   home: string
   state: string
   config: string
+  data: string
   worktree: string
   directory: string
 }

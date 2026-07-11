@@ -303,7 +303,7 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       return {
         icon: "glasses",
         title: i18n.t("ui.tool.read"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
+        subtitle: input.file_path || input.filePath ? getFilename(input.file_path || input.filePath) : undefined,
       }
     case "list":
       return {
@@ -363,13 +363,13 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       return {
         icon: "code-lines",
         title: i18n.t("ui.messagePart.title.edit"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
+        subtitle: input.file_path || input.filePath ? getFilename(input.file_path || input.filePath) : undefined,
       }
     case "write":
       return {
         icon: "code-lines",
         title: i18n.t("ui.messagePart.title.write"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
+        subtitle: input.file_path || input.filePath ? getFilename(input.file_path || input.filePath) : undefined,
       }
     case "apply_patch":
       return {
@@ -798,7 +798,7 @@ function contextToolDetail(part: ToolPart): string | undefined {
 function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
   const input = (part.state.input ?? {}) as Record<string, unknown>
   const path = typeof input.path === "string" ? input.path : "/"
-  const filePath = typeof input.filePath === "string" ? input.filePath : undefined
+  const filePath = typeof input.file_path === "string" ? input.file_path : typeof input.filePath === "string" ? input.filePath : undefined
   const pattern = typeof input.pattern === "string" ? input.pattern : undefined
   const include = typeof input.include === "string" ? input.include : undefined
   const offset = typeof input.offset === "number" ? input.offset : undefined
@@ -1681,7 +1681,7 @@ ToolRegistry.register({
           icon="glasses"
           trigger={{
             title: i18n.t("ui.tool.read"),
-            subtitle: props.input.filePath ? getFilename(props.input.filePath) : "",
+            subtitle: props.input.file_path || props.input.filePath ? getFilename(props.input.file_path || props.input.filePath) : "",
             args,
           }}
         />
@@ -1983,9 +1983,15 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const fileComponent = useFileComponent()
-    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.filePath))
-    const path = createMemo(() => props.metadata?.filediff?.file || props.input.filePath || "")
-    const filename = () => getFilename(props.input.filePath ?? "")
+    // 工具输入使用 snake_case（与服务器 Zod schema 一致）
+    const input = () => props.input
+    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, input().file_path || input().filePath))
+    const path = createMemo(() => props.metadata?.filediff?.file || input().file_path || input().filePath || "")
+    const hasDiff = createMemo(() =>
+      !!(props.metadata?.filediff) ||
+      !!(input().old_string || input().new_string || input().oldString || input().newString)
+    )
+    const filename = () => getFilename(input().file_path ?? input().filePath ?? "")
     const pending = () => props.status === "pending" || props.status === "running"
     return (
       <div data-component="edit-tool">
@@ -2004,9 +2010,9 @@ ToolRegistry.register({
                     <span data-slot="message-part-title-filename">{filename()}</span>
                   </Show>
                 </div>
-                <Show when={!pending() && props.input.filePath?.includes("/")}>
+                <Show when={!pending() && (input().file_path?.includes("/") || input().filePath?.includes("/"))}>
                   <div data-slot="message-part-path">
-                    <span data-slot="message-part-directory">{getDirectory(props.input.filePath!)}</span>
+                    <span data-slot="message-part-directory">{getDirectory(input().file_path ?? input().filePath ?? "")}</span>
                   </div>
                 </Show>
               </div>
@@ -2018,7 +2024,7 @@ ToolRegistry.register({
             </div>
           }
         >
-          <Show when={path()}>
+          <Show when={path() || hasDiff()}>
             <ToolFileAccordion
               path={path()}
               actions={
@@ -2032,12 +2038,12 @@ ToolRegistry.register({
                   component={fileComponent}
                   mode="diff"
                   before={{
-                    name: props.metadata?.filediff?.file || props.input.filePath,
-                    contents: props.metadata?.filediff?.before || props.input.oldString,
+                    name: props.metadata?.filediff?.file || input().file_path || input().filePath,
+                    contents: props.metadata?.filediff?.before || input().old_string || input().oldString,
                   }}
                   after={{
-                    name: props.metadata?.filediff?.file || props.input.filePath,
-                    contents: props.metadata?.filediff?.after || props.input.newString,
+                    name: props.metadata?.filediff?.file || input().file_path || input().filePath,
+                    contents: props.metadata?.filediff?.after || input().new_string || input().newString,
                   }}
                 />
               </div>
@@ -2055,9 +2061,9 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const fileComponent = useFileComponent()
-    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.filePath))
-    const path = createMemo(() => props.input.filePath || "")
-    const filename = () => getFilename(props.input.filePath ?? "")
+    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.file_path || props.input.filePath))
+    const path = createMemo(() => props.input.file_path || props.input.filePath || "")
+    const filename = () => getFilename(props.input.file_path ?? props.input.filePath ?? "")
     const pending = () => props.status === "pending" || props.status === "running"
     return (
       <div data-component="write-tool">
@@ -2076,9 +2082,9 @@ ToolRegistry.register({
                     <span data-slot="message-part-title-filename">{filename()}</span>
                   </Show>
                 </div>
-                <Show when={!pending() && props.input.filePath?.includes("/")}>
+                <Show when={!pending() && (props.input.file_path?.includes("/") || props.input.filePath?.includes("/"))}>
                   <div data-slot="message-part-path">
-                    <span data-slot="message-part-directory">{getDirectory(props.input.filePath!)}</span>
+                    <span data-slot="message-part-directory">{getDirectory(props.input.file_path ?? props.input.filePath ?? "")}</span>
                   </div>
                 </Show>
               </div>
@@ -2093,7 +2099,7 @@ ToolRegistry.register({
                   component={fileComponent}
                   mode="text"
                   file={{
-                    name: props.input.filePath,
+                    name: props.input.file_path || props.input.filePath,
                     contents: props.input.content,
                     cacheKey: checksum(props.input.content),
                   }}

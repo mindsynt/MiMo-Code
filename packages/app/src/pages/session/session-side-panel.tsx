@@ -15,6 +15,8 @@ import { useDialog } from "@mimo-ai/ui/context/dialog"
 import FileTree from "@/components/file-tree"
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { SessionContextTab, SortableTab, FileVisual } from "@/components/session"
+import { SessionDocsTab } from "@/components/session/session-docs-tab"
+import { SessionTasksTab } from "@/components/session/session-tasks-tab"
 import { useCommand } from "@/context/command"
 import { useFile, type SelectedLineRange } from "@/context/file"
 import { useLanguage } from "@/context/language"
@@ -278,6 +280,16 @@ export function SessionSidePanel(props: {
                           </div>
                         </Tabs.Trigger>
                       </Show>
+                      <Tabs.Trigger value="docs">
+                        <div class="flex items-center gap-1.5">
+                          <div>{language.t("session.tab.docs")}</div>
+                        </div>
+                      </Tabs.Trigger>
+                      <Tabs.Trigger value="tasks">
+                        <div class="flex items-center gap-1.5">
+                          <div>{language.t("session.tab.tasks")}</div>
+                        </div>
+                      </Tabs.Trigger>
                       <SortableProvider ids={openedTabs()}>
                         <For each={openedTabs()}>{(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}</For>
                       </SortableProvider>
@@ -332,6 +344,22 @@ export function SessionSidePanel(props: {
                       </Show>
                     </Tabs.Content>
                   </Show>
+
+                  <Tabs.Content value="docs" class="flex flex-col h-full overflow-hidden contain-strict">
+                    <Show when={activeTab() === "docs"}>
+                      <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                        <SessionDocsTab />
+                      </div>
+                    </Show>
+                  </Tabs.Content>
+
+                  <Tabs.Content value="tasks" class="flex flex-col h-full overflow-hidden contain-strict">
+                    <Show when={activeTab() === "tasks"}>
+                      <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                        <SessionTasksTab />
+                      </div>
+                    </Show>
+                  </Tabs.Content>
 
                   <Show when={activeFileTab()} keyed>
                     {(tab) => <FileTabContent tab={tab} />}
