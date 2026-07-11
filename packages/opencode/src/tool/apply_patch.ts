@@ -303,6 +303,21 @@ export const ApplyPatchTool = Tool.define(
       description: DESCRIPTION,
       parameters: PatchParams,
       execute: (params: z.infer<typeof PatchParams>, ctx: Tool.Context) => run(params, ctx).pipe(Effect.orDie),
+      verify: (result, params, ctx) =>
+        Effect.gen(function* () {
+          const files = (result.metadata as any)?.files as Array<{ filePath: string }> | undefined
+          if (!files || files.length === 0) return undefined
+
+          const missing: string[] = []
+          for (const file of files) {
+            const exists = yield* afs.existsSafe(file.filePath)
+            if (!exists) missing.push(file.filePath)
+          }
+          return missing.length > 0
+            ? "⚠ File verification warning: some patched files could not be found:\n" +
+                missing.map((f) => `  - ${f}`).join("\n")
+            : undefined
+        }),
     }
   }),
 )

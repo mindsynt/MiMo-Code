@@ -41,6 +41,19 @@ export interface Def<Parameters extends z.ZodType = z.ZodType, M extends Metadat
   parameters: Parameters
   execute(args: z.infer<Parameters>, ctx: Context): Effect.Effect<ExecuteResult<M>>
   formatValidationError?(error: z.ZodError): string
+  /**
+   * Optional post-execution verification hook. Runs after execute() succeeds
+   * but BEFORE output truncation — so warning text is still part of the
+   * truncated output budget.
+   *
+   * Return a warning string if something looks wrong (e.g. file read-back
+   * doesn't match expectations). Return undefined if everything checks out.
+   *
+   * Errors thrown inside verify are caught and logged — they NEVER fail the
+   * tool call. This hook is advisory: the tool already succeeded, verify
+   * just flags suspicious state.
+   */
+  verify?(result: ExecuteResult<M>, args: z.infer<Parameters>, ctx: Context): Effect.Effect<string | undefined>
   shell?: {
     description: string
     parse(script: string): Effect.Effect<z.infer<Parameters>[], unknown>
@@ -120,11 +133,24 @@ function wrap<Parameters extends z.ZodType, Result extends Metadata>(
             },
           })
           const result = yield* execute(args, ctx)
+
+          // Verify: only for non-streaming results (truncated streaming output
+          // like bash uses metadata.truncated as a flag, not a bug).
+          // Verify is advisory — errors are caught silently and never fail the call.
+          let verifyWarning: string | undefined
+          if (result.metadata.truncated === undefined && toolInfo.verify) {
+            const eff: Effect.Effect<string | undefined, never, never> = toolInfo.verify(
+              result, args, ctx,
+            ) as any
+            verifyWarning = yield* eff
+          }
+
+          const output = verifyWarning ? result.output + "\n\n" + verifyWarning : result.output
           if (result.metadata.truncated !== undefined) {
             return result
           }
           const agent = yield* agents.get(ctx.agent)
-          const truncated = yield* truncate.output(result.output, {}, agent)
+          const truncated = yield* truncate.output(output, {}, agent)
           return {
             ...result,
             output: truncated.content,
