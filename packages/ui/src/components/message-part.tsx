@@ -541,6 +541,7 @@ function partDefaultOpen(part: PartType, shell = false, edit = false) {
 
 export function AssistantParts(props: {
   messages: AssistantMessage[]
+  parentParts?: PartType[]
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
   working?: boolean
@@ -625,9 +626,23 @@ export function AssistantParts(props: {
           }
         }
       }
+      let taskDesc = ""
+
+      // 匹配父级消息中的 task 工具（子 agent 的任务描述）
+      if (props.parentParts) {
+        for (const p of props.parentParts) {
+          if (p.type === "tool" && p.tool === "task") {
+            const input = (p.state.input ?? {}) as Record<string, unknown>
+            if (String(input.subagent_type).toLowerCase() === entry.message.agent?.toLowerCase()) {
+              taskDesc = String(input.description ?? "")
+            }
+          }
+        }
+      }
+
       const names = [...toolNames]
-      const action = names.length > 0 ? names.join(" · ") : "Message"
-      const detail = mainPath || ""
+      const action = taskDesc || (names.length > 0 ? names.join(" · ") : "Message")
+      const detail = taskDesc ? "" : (mainPath || "")
       entry.summary = { action, detail }
     }
 
