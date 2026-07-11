@@ -6,7 +6,7 @@ import { Spinner } from "@mimo-ai/ui/spinner"
 import { Tooltip } from "@mimo-ai/ui/tooltip"
 import { getFilename } from "@mimo-ai/shared/util/path"
 import { A, useParams } from "@solidjs/router"
-import { type Accessor, createMemo, For, type JSX, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, For, type Accessor, type JSX, Match, Show, Switch } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
@@ -24,6 +24,28 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
   const notification = useNotification()
   const permission = usePermission()
   const dirs = createMemo(() => [props.project.worktree, ...(props.project.sandboxes ?? [])])
+  const workingState = createMemo(() => {
+    for (const directory of dirs()) {
+      const [store] = globalSync.child(directory, { bootstrap: false })
+      for (const sessionId in store.session_status) {
+        const status = store.session_status[sessionId]
+        if (status && status.type !== "idle") {
+          return { working: true, tint: messageAgentColor(store.message[sessionId], store.agent) }
+        }
+      }
+      for (const sessionId in store.message) {
+        const messages = store.message[sessionId]
+        if (messages?.some(
+          (m) => m.role === "assistant" && typeof m.time?.completed !== "number",
+        )) {
+          return { working: true, tint: messageAgentColor(messages, store.agent) }
+        }
+      }
+    }
+    return { working: false, tint: undefined }
+  })
+  const isAnyWorking = () => workingState().working
+  const workingTint = () => workingState().tint
   const unseenCount = createMemo(() =>
     dirs().reduce((total, directory) => total + notification.project.unseenCount(directory), 0),
   )
@@ -34,7 +56,10 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
       return hasProjectPermissions(store.permission, (item) => !permission.autoResponds(item, directory))
     }),
   )
-  const notify = createMemo(() => props.notify && (hasPermissions() || unseenCount() > 0))
+  const notify = createMemo(() => {
+    if (isAnyWorking()) return true
+    return props.notify && (hasPermissions() || unseenCount() > 0)
+  })
   const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
 
   return (
@@ -53,14 +78,23 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
         />
       </div>
       <Show when={notify()}>
-        <div
-          classList={{
-            "absolute top-px right-px size-1.5 rounded-full z-10": true,
-            "bg-surface-warning-strong": hasPermissions(),
-            "bg-icon-critical-base": !hasPermissions() && hasError(),
-            "bg-text-interactive-base": !hasPermissions() && !hasError(),
-          }}
-        />
+        <Switch>
+          <Match when={isAnyWorking()}>
+            <div class="absolute top-px right-px z-10 flex items-center justify-center">
+              <Spinner class="size-3" style={{ color: workingTint() ?? "var(--icon-interactive-base)" }} />
+            </div>
+          </Match>
+          <Match when={true}>
+            <div
+              classList={{
+                "absolute top-px right-px size-1.5 rounded-full z-10": true,
+                "bg-surface-warning-strong": hasPermissions(),
+                "bg-icon-critical-base": !hasPermissions() && hasError(),
+                "bg-text-interactive-base": !hasPermissions() && !hasError(),
+              }}
+            />
+          </Match>
+        </Switch>
       </Show>
     </div>
   )

@@ -84,6 +84,7 @@ export const WorkspaceDragOverlay = (props: {
 const WorkspaceHeader = (props: {
   local: Accessor<boolean>
   busy: Accessor<boolean>
+  sessionWorking: Accessor<boolean>
   open: Accessor<boolean>
   directory: string
   language: ReturnType<typeof useLanguage>
@@ -97,7 +98,7 @@ const WorkspaceHeader = (props: {
 }): JSX.Element => (
   <div class="flex items-center gap-1 min-w-0 flex-1">
     <div class="flex items-center justify-center shrink-0 size-6">
-      <Show when={props.busy()} fallback={<Icon name="branch" size="small" />}>
+      <Show when={props.busy() || props.sessionWorking()} fallback={<Icon name="branch" size="small" />}>
         <Spinner class="size-[15px]" />
       </Show>
     </div>
@@ -321,6 +322,19 @@ export const SortableWorkspace = (props: {
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
   const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
+  const sessionWorking = createMemo(() => {
+    for (const sessionId in workspaceStore.session_status) {
+      const status = workspaceStore.session_status[sessionId]
+      if (status && status.type !== "idle") return true
+    }
+    for (const sessionId in workspaceStore.message) {
+      const messages = workspaceStore.message[sessionId]
+      if (messages?.some(
+        (m) => m.role === "assistant" && typeof m.time?.completed !== "number",
+      )) return true
+    }
+    return false
+  })
   const loading = () => query.isLoading && count() === 0
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
@@ -334,6 +348,7 @@ export const SortableWorkspace = (props: {
     <WorkspaceHeader
       local={local}
       busy={busy}
+      sessionWorking={sessionWorking}
       open={open}
       directory={props.directory}
       language={language}
