@@ -66,7 +66,7 @@ export function ContentMarkdown(props: Props) {
         innerHTML={html()}
       />
 
-      {!props.expand && overflow.status && (
+      {((!props.expand && overflow.status) || expanded()) && (
         <button
           type="button"
           data-component="text-button"

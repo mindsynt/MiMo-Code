@@ -1,0 +1,6 @@
+[test]
+preload = ["./test/preload.ts"]
+jsxImportSource = "solid-js"
+
+# 使用 browser 条件，让 solid-js 解析为客户端版本
+customConditions = ["browser"]

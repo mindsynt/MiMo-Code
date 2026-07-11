@@ -589,15 +589,12 @@ export function EditTool(props: ToolProps) {
 
 export function BashTool(props: ToolProps) {
   return (
-    <>
-      <ContentBash
-        expand
-        command={props.state.input.command}
-        output={props.state.metadata.output ?? props.state.metadata?.stdout}
-        description={props.state.metadata.description}
-      />
-      </Show>
-    </>
+    <ContentBash
+      expand
+      command={props.state.input.command}
+      output={props.state.metadata.output ?? props.state.metadata?.stdout}
+      description={props.state.metadata.description}
+    />
   )
 }
 
@@ -685,7 +682,6 @@ export function FallbackTool(props: ToolProps) {
             </>
           )}
         </For>
-      </div>
       <Switch>
         <Match when={props.state.output}>
           <div data-component="tool-result">

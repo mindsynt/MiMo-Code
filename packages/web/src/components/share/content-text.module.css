@@ -32,7 +32,6 @@
     display: block;
     overflow: visible;
   }
-  }
 
   [data-slot="expand-button"] {
     flex: 0 0 auto;
