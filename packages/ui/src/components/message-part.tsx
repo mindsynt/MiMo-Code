@@ -651,7 +651,9 @@ export function AssistantParts(props: {
     return result.filter((entry) => entry.groups.length > 0)
   })
 
-  const [expandedMessages, setExpandedMessages] = createStore<Record<string, boolean>>({})
+  const [expandedMessages, setExpandedMessages] = createStore<Record<string, boolean>>(
+    Object.fromEntries(props.messages.map((m) => [m.id, true])),
+  )
   const expandedValues = createMemo(() =>
     Object.entries(expandedMessages)
       .filter(([, v]) => v)

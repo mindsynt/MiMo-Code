@@ -1294,3 +1294,49 @@
     color: var(--icon-weak);
   }
 }
+
+/* Agent turn accordion content: 左边界视觉引导线 */
+[data-slot="agent-turn-trigger"] {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-slot="accordion-content"] [data-component="text-part"] [data-component="markdown"] {
+  & > p {
+    margin-bottom: 12px;
+    line-height: 1.7;
+    color: var(--text-strong);
+  }
+
+  & > p:last-child {
+    margin-bottom: 0;
+  }
+
+  & > ul, & > ol {
+    margin: 8px 0 12px;
+    line-height: 1.65;
+    padding-left: 24px;
+  }
+
+  & > p + ul,
+  & > p + ol {
+    margin-top: -4px;
+  }
+}
+
+/* 工具调用卡片样式 */
+[data-component="tool-part-wrapper"] + [data-component="tool-part-wrapper"] {
+  margin-top: 4px;
+}
+
+[data-component="collapsible"].tool-collapsible {
+  margin: 4px 0;
+  border: 1px solid var(--border-weaker-base);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--border-weak-base);
+  }
+}
