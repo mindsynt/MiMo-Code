@@ -1370,5 +1370,19 @@
   max-height: 40vh;
   overflow-y: auto;
   overscroll-behavior: contain;
+
+/* agent 触发头高度微调，内容有更多呼吸空间 */
+[data-slot=agent-turn-trigger] [data-slot=accordion-chevron] {
+  margin-right: -2px;
 }
+
+/* 工具输出在 agent 内容中不溢出 */
+[data-component=agent-turn-content] [data-component=tool-output] {
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+[data-component=agent-turn-content] [data-component=bash-output] {
+  max-height: 30vh;
+  overflow-y: auto;
 }

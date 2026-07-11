@@ -705,7 +705,7 @@ export function AssistantParts(props: {
                   <div data-slot="agent-turn-trigger">
                     <div class="flex items-center gap-2 min-w-0">
                       <Icon name="chevron-down" size="small" data-slot="accordion-chevron" />
-                      <span class="font-medium text-text-strong truncate">{agentName}</span>
+                      <span class="font-semibold text-text-strong truncate">{agentName}</span>
                       <Show when={entry.summary.action}>
                         <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
                       </Show>
