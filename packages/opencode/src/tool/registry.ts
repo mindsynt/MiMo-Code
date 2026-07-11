@@ -415,7 +415,14 @@ export const layer = Layer.effect(
           const description = useShell ? tool.shell!.description : output.description
           return {
             id: tool.id,
-            description,
+            description: [
+              description,
+              tool.id === ActorTool.id ? yield* describeTask(input.agent) : undefined,
+              tool.id === SkillTool.id ? yield* describeSkill(input.agent) : undefined,
+              tool.id === WorkflowTool.id ? yield* describeWorkflow() : undefined,
+            ]
+              .filter(Boolean)
+              .join("\n"),
             parameters: useShell ? effective.parameters : output.parameters,
             execute: effective.execute,
             formatValidationError: effective.formatValidationError,

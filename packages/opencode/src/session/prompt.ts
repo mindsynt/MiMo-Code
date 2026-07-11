@@ -3296,18 +3296,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 yield* bus.publish(TuiEvent.InstructionsLoaded, { files }).pipe(Effect.ignore)
               }
             }
-            const agentTypes = (yield* agents.list())
-              .filter((item) => item.mode !== "primary" && !item.hidden)
-              .map((item) =>
-                item.description
-                  ? `- ${item.name}: ${item.description}`
-                  : `- ${item.name}: This subagent should only be called manually by the user.`,
-              )
             const additions = [
               ...env,
               ...(skills ? [skills] : []),
               ...instructions.content,
-              agentTypes.length > 0 ? ["Available agent types:", ...agentTypes].join("\n") : "",
               ...(format.type === "json_schema" ? [STRUCTURED_OUTPUT_SYSTEM_PROMPT] : []),
             ]
             // Note: `buildLLMRequestPrefix` also returns a `tools` field, but we
