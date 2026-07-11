@@ -131,13 +131,13 @@ export function Part(props: PartProps) {
       <div data-component="content">
         {props.message.role === "user" && props.part.type === "text" && (
           <div data-component="user-text">
-            <ContentText text={props.part.text} expand={props.last} />
+            <ContentText text={props.part.text} expand />
           </div>
         )}
         {props.message.role === "assistant" && props.part.type === "text" && (
           <div data-component="assistant-text">
             <div data-component="assistant-text-markdown">
-              <ContentMarkdown expand={props.last} text={props.part.text} />
+              <ContentMarkdown expand text={props.part.text} />
             </div>
             {props.last && props.message.role === "assistant" && props.message.time.completed && (
               <Footer
