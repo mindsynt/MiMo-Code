@@ -374,6 +374,18 @@ export function SessionTurn(
     overflowAnchor: "dynamic",
   })
 
+  // 获取正在响应的模型名称
+  const pendingModelName = createMemo(() => {
+    const msg = pending()
+    if (!msg || msg.role !== "assistant") return ""
+    const provider = data.store.provider
+    if (!provider?.all) return ""
+    const p = provider.all.find((p: any) => p.id === msg.providerID)
+    if (!p) return msg.providerID
+    const m = p.models?.[msg.modelID]
+    return m?.name ?? msg.modelID
+  })
+
   return (
     <div data-component="session-turn" class={props.classes?.root}>
       <div
@@ -413,7 +425,13 @@ export function SessionTurn(
               </Show>
               <Show when={showThinking()}>
                 <div data-slot="session-turn-thinking">
-                  <TextShimmer text={i18n.t("ui.sessionTurn.status.thinking")} />
+                  <TextShimmer
+                    text={
+                      pendingModelName()
+                        ? i18n.t("ui.sessionTurn.status.thinkingWithTopic", { topic: pendingModelName() })
+                        : i18n.t("ui.sessionTurn.status.thinking")
+                    }
+                  />
                   <Show when={!showReasoningSummaries()}>
                     <TextReveal
                       text={reasoningHeading()}
