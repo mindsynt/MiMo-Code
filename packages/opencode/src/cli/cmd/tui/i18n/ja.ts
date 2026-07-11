@@ -55,6 +55,8 @@ export const dict = {
     "{highlight}/dark{/highlight} でダークモード、{highlight}/light{/highlight} でライトモードに切り替えます",
   "tui.tips.doc": "{highlight}/doc{/highlight} を実行してユーザードキュメントを開きます",
   "tui.tips.free_models": "期間限定で無料モデルを提供中。今すぐお試しください！",
+  "tui.tips.multi_skills":
+    "1 つのメッセージ内で複数の {highlight}/skill-name{/highlight} を組み合わせて、複数の Skill を同時に使えます",
   "tui.tips.background": "{highlight}/background{/highlight} を実行してホーム背景にお好みの画像を設定できます",
   "tui.tips.undo": "{highlight}/undo{/highlight} で直前のメッセージとファイル変更を取り消します",
   "tui.tips.redo": "{highlight}/redo{/highlight} で取り消したメッセージとファイル変更を復元します",

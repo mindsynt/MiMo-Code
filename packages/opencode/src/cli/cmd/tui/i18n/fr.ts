@@ -56,6 +56,8 @@ export const dict = {
     "Exécutez {highlight}/dark{/highlight} pour le mode sombre ou {highlight}/light{/highlight} pour le mode clair",
   "tui.tips.doc": "Exécutez {highlight}/doc{/highlight} pour ouvrir la documentation utilisateur",
   "tui.tips.free_models": "Modèles gratuits disponibles pour une durée limitée — essayez-les !",
+  "tui.tips.multi_skills":
+    "Combinez plusieurs déclencheurs {highlight}/skill-name{/highlight} dans un même message pour utiliser plusieurs Skills ensemble",
   "tui.tips.background":
     "Exécutez {highlight}/background{/highlight} pour définir une image personnalisée comme fond d'écran d'accueil",
   "tui.tips.undo": "Utilisez {highlight}/undo{/highlight} pour annuler le dernier message et ses modifications",

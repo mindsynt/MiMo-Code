@@ -56,6 +56,8 @@ export const dict = {
     "Ejecuta {highlight}/dark{/highlight} para el modo oscuro o {highlight}/light{/highlight} para el modo claro",
   "tui.tips.doc": "Ejecuta {highlight}/doc{/highlight} para abrir la documentación de usuario",
   "tui.tips.free_models": "Modelos gratuitos disponibles por tiempo limitado — ¡pruébalos ahora!",
+  "tui.tips.multi_skills":
+    "Combina varios {highlight}/skill-name{/highlight} en un mismo mensaje para usar varias Skills a la vez",
   "tui.tips.background":
     "Ejecuta {highlight}/background{/highlight} para usar una imagen personalizada como fondo de inicio",
   "tui.tips.undo":

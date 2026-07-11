@@ -51,6 +51,8 @@ export const dict: Record<string, string> = {
     "Run {highlight}/dark{/highlight} for dark mode or {highlight}/light{/highlight} for light mode",
   "tui.tips.doc": "Run {highlight}/doc{/highlight} to open the user documentation",
   "tui.tips.free_models": "Free models are available for a limited time — try them now!",
+  "tui.tips.multi_skills":
+    "Combine multiple {highlight}/skill-name{/highlight} triggers in a single message to use several skills together",
   "tui.tips.background":
     "Run {highlight}/background{/highlight} to set a custom image as your home background",
   "tui.tips.undo": "Use {highlight}/undo{/highlight} to revert the last message and file changes",

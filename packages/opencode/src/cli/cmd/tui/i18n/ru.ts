@@ -56,6 +56,8 @@ export const dict = {
     "Выполните {highlight}/dark{/highlight} для тёмного режима или {highlight}/light{/highlight} для светлого",
   "tui.tips.doc": "Выполните {highlight}/doc{/highlight}, чтобы открыть пользовательскую документацию",
   "tui.tips.free_models": "Бесплатные модели доступны ограниченное время — попробуйте их сейчас!",
+  "tui.tips.multi_skills":
+    "Комбинируйте несколько {highlight}/skill-name{/highlight} в одном сообщении, чтобы использовать несколько Skills одновременно",
   "tui.tips.background":
     "Выполните {highlight}/background{/highlight}, чтобы установить произвольное изображение в качестве фона главной страницы",
   "tui.tips.undo":

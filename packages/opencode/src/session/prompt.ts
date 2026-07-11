@@ -611,6 +611,84 @@ ${entries}
         }
       }
 
+      // Explicit multi-skill mentions in free text ("/foo ... /bar ..."). This
+      // is separate from the SessionPrompt.command single-command path, which
+      // already wraps SKILL.md content itself. Guard against double-wrapping
+      // by checking whether userMessage.parts already contains such a block.
+      const alreadyWrapped = userMessage.parts.some(
+        (p) => p.type === "text" && p.text.startsWith('<skill_content name="'),
+      )
+      if (!alreadyWrapped) {
+        const availableSkills = yield* sys.available(input.agent)
+        if (availableSkills.length > 0) {
+          const bodyText = userMessage.parts
+            .flatMap((p) => (p.type === "text" ? [p.text] : []))
+            .join("\n")
+          const stripped = bodyText
+            .replace(/```[\s\S]*?```/g, " ")
+            .replace(/`[^`\n]*`/g, " ")
+          const mentioned: string[] = []
+          const seen = new Set<string>()
+          const mentionRe = /(?:^|\s)\/([A-Za-z][A-Za-z0-9_-]*)(?=[^A-Za-z0-9_-]|$)/g
+          for (const m of stripped.matchAll(mentionRe)) {
+            const name = m[1]
+            if (!name || seen.has(name)) continue
+            if (!availableSkills.some((s) => s.name === name)) continue
+            seen.add(name)
+            mentioned.push(name)
+          }
+
+          if (mentioned.length > 0) {
+            const MAX_AUTOLOAD = 3
+            const toLoad = mentioned.slice(0, MAX_AUTOLOAD)
+            const overflow = mentioned.slice(MAX_AUTOLOAD)
+            for (const name of toLoad) {
+              const info = availableSkills.find((s) => s.name === name)
+              if (!info) continue
+              const part = yield* sessions.updatePart({
+                id: PartID.ascending(),
+                messageID: userMessage.info.id,
+                sessionID: userMessage.info.sessionID,
+                type: "text",
+                text: `<skill_content name="${name}">\n${info.content}\n</skill_content>`,
+                synthetic: true,
+              })
+              userMessage.parts.push(part)
+            }
+
+            if (mentioned.length >= 2) {
+              const loadedHint = toLoad.length > 0
+                ? `SKILL.md for [${toLoad.join(", ")}] has been auto-loaded above.`
+                : ""
+              const overflowHint = overflow.length > 0
+                ? `For [${overflow.join(", ")}], use the Skill tool to load them on demand.`
+                : ""
+              const part = yield* sessions.updatePart({
+                id: PartID.ascending(),
+                messageID: userMessage.info.id,
+                sessionID: userMessage.info.sessionID,
+                type: "text",
+                text: `<system-reminder>
+The user has explicitly referenced multiple skills in this message: ${mentioned.join(", ")}.
+${loadedHint} ${overflowHint}
+
+Before starting work, complete an orchestration plan:
+1. Read the SKILL.md of every referenced skill FIRST, then plan (never plan from skill descriptions alone — the full SKILL.md may contain constraints that invalidate an imagined workflow)
+2. Classify the composition relationship: pipeline (A's output → B's input) / parallel (each handles a separate part) / constraint overlay (one does the work, the other provides rules or standards)
+3. If pipeline: define the interface contract for intermediate artifacts — format and file path
+4. If two skills give instructions on the same dimension (output format / style / process), explicitly declare a conflict resolution rule: which skill takes precedence on which dimension
+5. Output a concise workflow (phase → skill used → artifact), then execute according to it
+
+Keep planning proportional to task complexity: for simple combinations, two or three sentences suffice.
+</system-reminder>`,
+                synthetic: true,
+              })
+              userMessage.parts.push(part)
+            }
+          }
+        }
+      }
+
       if (input.agent.name !== "plan" && assistantMessage?.info.agent === "plan") {
         const plan = Session.plan(input.session)
         if (!(yield* fsys.existsSafe(plan))) return input.messages

@@ -54,6 +54,8 @@ export const dict = {
     "运行 {highlight}/dark{/highlight} 切换到深色模式，{highlight}/light{/highlight} 切换到浅色模式",
   "tui.tips.doc": "运行 {highlight}/doc{/highlight} 打开使用文档",
   "tui.tips.free_models": "限时提供免费模型中，立即体验！",
+  "tui.tips.multi_skills":
+    "在同一条消息中输入多个 {highlight}/skill-name{/highlight} 可以同时组合使用多个 Skills",
   "tui.tips.background": "运行 {highlight}/background{/highlight} 设置自定义图片作为主页背景",
   "tui.tips.undo": "使用 {highlight}/undo{/highlight} 撤销最后一条消息及其文件改动",
   "tui.tips.redo": "使用 {highlight}/redo{/highlight} 恢复之前撤销的消息和文件改动",
