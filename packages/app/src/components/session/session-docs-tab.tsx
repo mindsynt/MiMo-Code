@@ -23,9 +23,9 @@ async function listDir(
     const result = await client.file.list({ directory, path: dirPath })
     const entries = result.data ?? []
     return entries
-      .filter((e: any) => e.name?.endsWith(".md"))
-      .map((e: any) => ({
-        name: e.name,
+      .filter((e: { name?: string }) => e.name?.endsWith(".md"))
+      .map((e: { name?: string; mtime?: number }) => ({
+        name: e.name!,
         fullPath: `${dirPath}/${e.name}`,
         mtime: e.mtime,
       }))
@@ -129,10 +129,14 @@ function isRelevantFileChange(filePath: string, categoryDirs: DirConfig[][]): bo
 
 function createDebounce(ms: number) {
   let timer: ReturnType<typeof setTimeout> | undefined
-  return (fn: () => void) => {
+  const debounced = (fn: () => void) => {
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => { timer = undefined; fn() }, ms)
   }
+  debounced.clear = () => {
+    if (timer) { clearTimeout(timer); timer = undefined }
+  }
+  return debounced
 }
 
 function totalCount(resources: { data: GlobalFileEntry[] | undefined }[]): number {
@@ -204,16 +208,27 @@ export function SessionDocsTab(props: { onCount?: (count: number) => void }) {
     const gDataDir = globalDataDir()
     const cats = categories()
     try {
+/** 浅比较两个文件列表是否实质一致（名称 + mtime 不变视为相同） */
+function filesEqual(a: GlobalFileEntry[] | undefined, b: GlobalFileEntry[] | undefined) {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name || a[i].mtime !== b[i].mtime) return false
+  }
+  return true
+}
+
+// ... （在 refreshAll 中使用）
       const [plans, specs, reports] = await Promise.all([
         fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: cats[0].dirs }),
         fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: cats[1].dirs }),
         fetchFromDirs({ client: globalSDK.client, baseUrl: serverBase, directory: d, dirs: cats[2].dirs }),
       ])
-      setPlanData((prev) => (JSON.stringify(prev) !== JSON.stringify(plans) ? plans : prev))
-      setSpecData((prev) => (JSON.stringify(prev) !== JSON.stringify(specs) ? specs : prev))
-      setReportData((prev) => (JSON.stringify(prev) !== JSON.stringify(reports) ? reports : prev))
-    } catch {
-      // 保持旧数据，无闪动
+      setPlanData((prev) => (filesEqual(prev, plans) ? prev : plans))
+      setSpecData((prev) => (filesEqual(prev, specs) ? prev : specs))
+      setReportData((prev) => (filesEqual(prev, reports) ? prev : reports))
+    } catch (error) {
+      console.error("[docs] refresh failed", error)
     } finally {
       setDataLoading(false)
     }
@@ -222,14 +237,15 @@ export function SessionDocsTab(props: { onCount?: (count: number) => void }) {
   const debouncedRefresh = createDebounce(500)
 
   onMount(() => { refreshAll() })
+  onCleanup(() => debouncedRefresh.clear())
 
   onMount(() => {
     const allCategoryDirs = categories().map((c) => c.dirs)
     const stop = sdk.event.listen((e: any) => {
-      const ev = e?.details ?? e?.payload ?? e
+      const ev = e.details ?? e?.payload ?? e
       if (ev?.type === "file.watcher.updated") {
-        const props = ev.properties as { file: string; event: string } | undefined
-        if (props?.file && isRelevantFileChange(props.file, allCategoryDirs))
+        const props = ev.properties
+        if (props?.file && typeof props.file === "string" && isRelevantFileChange(props.file, allCategoryDirs))
           debouncedRefresh(() => refreshAll())
       }
     })

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, For, onMount, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useLanguage } from "@/context/language"
 import { ScrollView } from "@mimo-ai/ui/scroll-view"
@@ -18,7 +18,7 @@ const STATUS_KEYS: Record<string, string> = {
   cancelled: "session.tasks.status.cancelled",
 }
 
-const STATUS_ICONS: Record<string, string> = {
+const STATUS_ICONS: Record<string, "circle-x" | "circle-check" | "circle-ban-sign"> = {
   pending: "circle-x",
   in_progress: "circle-check",
   completed: "circle-check",
@@ -30,9 +30,13 @@ function sessionTitle(session: { title?: string; id: string } | undefined) {
   return session.title ?? session.id
 }
 
+/**
+ * 调用 sync 上下文的 todo 获取方法。
+ * createSimpleContext 的泛型推断存在限制，该方法实际存在于 sync 的返回对象中
+ * （见 sync.tsx line 517），此处绕过 TS 推断以访问。
+ */
 const syncTodo = (sync: ReturnType<typeof useSync>, sessionID: string) => {
-  const s: any = sync
-  return s.todo?.(sessionID) ?? Promise.resolve()
+  return (sync as { todo?: (id: string) => Promise<void> }).todo?.(sessionID) ?? Promise.resolve()
 }
 
 export function SessionTasksTab(props: { onCount?: (count: number) => void }) {
@@ -100,7 +104,7 @@ export function SessionTasksTab(props: { onCount?: (count: number) => void }) {
                 <div class="flex flex-col rounded-lg border border-border-base overflow-hidden bg-background-base">
                   <div class="h-8 flex items-center gap-x-1.5 px-3 border-b border-border-base bg-surface-raised-base">
                     <Icon
-                      name={STATUS_ICONS[status] as any}
+                      name={STATUS_ICONS[status]}
                       size="small"
                       class="size-4 shrink-0"
                       classList={{
@@ -119,7 +123,7 @@ export function SessionTasksTab(props: { onCount?: (count: number) => void }) {
                     {(item) => (
                       <div class="group w-full min-w-0 h-8 flex items-center justify-start gap-x-2 px-3 py-0 hover:bg-surface-raised-base-hover transition-colors border-b border-border-weaker-base last:border-b-0 bg-background-base">
                         <Icon
-                          name={STATUS_ICONS[status] as any}
+                          name={STATUS_ICONS[status]}
                           size="small"
                           class="size-4 shrink-0"
                           classList={{
