@@ -8,8 +8,8 @@ import { setTimeout as sleep } from "node:timers/promises"
 
 const SIGKILL_TIMEOUT_MS = 200
 
-const ALLOWLIST = new Set(["bash", "zsh", "sh", "dash", "ksh", "pwsh", "powershell", "cmd"])
-const LOGIN = new Set(["bash", "dash", "ksh", "sh", "zsh"])
+const BLACKLIST = new Set(["fish", "nu"])
+const LOGIN = new Set(["bash", "dash", "fish", "ksh", "sh", "zsh"])
 const POSIX = new Set(["bash", "dash", "ksh", "sh", "zsh"])
 
 export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean }): Promise<void> {
@@ -61,7 +61,7 @@ function pick() {
 }
 
 function select(file: string | undefined, opts?: { acceptable?: boolean }) {
-  if (file && (!opts?.acceptable || ALLOWLIST.has(name(file)))) return full(file)
+  if (file && (!opts?.acceptable || !BLACKLIST.has(name(file)))) return full(file)
   if (process.platform === "win32") {
     const shell = pick()
     if (shell) return shell
@@ -82,9 +82,7 @@ function fallback() {
   if (process.platform === "win32") {
     const file = gitbash()
     if (file) return file
-    const comspec = process.env.COMSPEC
-    if (comspec && ALLOWLIST.has(name(comspec))) return comspec
-    return "cmd.exe"
+    return process.env.COMSPEC || "cmd.exe"
   }
   if (process.platform === "darwin") return "/bin/zsh"
   const bash = which("bash")

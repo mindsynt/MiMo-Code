@@ -74,9 +74,3 @@ When to use what:
     spawn  — fan-out for parallel work, OR fire-and-forget background tasks
     wait   — pick up a previously-spawned actor's result on demand
     models — discover which models you can pass to --model (use --vision to find image-capable models for dispatching an image subagent)
-
-# WRONG — JSON fields directly, will fail:
-#   {"operation":"run","subagent_type":"explore","description":"x","prompt":"y"}  ✗
-#   {"script":"actor run explore \"x\" \"y\""}  ✗ (script must be plain text, not JSON)
-# RIGHT:
-#   actor run explore "x" "y"   ✓

@@ -64,29 +64,11 @@ import { TaskRegistry } from "@/task/registry"
 import { defaultLayer as SchedulerDefaultLayer } from "@/cron/scheduler"
 import { Auth } from "@/auth"
 import { shellWrap } from "./shell-wrap"
-import { createShellParser } from "./shell-parse-generic"
-import { SHELL_DESCRIPTIONS } from "./shell-descriptions"
 import * as BashInteractive from "./bash-interactive"
 import { resolveInvocationStyle } from "./invocation-style"
 import { BuiltinWorkflow } from "@/workflow/builtin"
 
 const log = Log.create({ service: "tool.registry" })
-
-// Declarative model → tool mapping. Each entry defines which tool variant to use
-// for a given model pattern. The first matching pattern wins. Patterns match against
-// modelID (e.g. "gpt-4o", "claude-sonnet-5"). This replaces hardcoded provider checks
-// so adding a new model family only requires adding a row here, not modifying registry logic.
-// More specific patterns must come before less specific ones.
-const modelToolOverrides: Array<{
-  modelPattern: string  // substring match against modelID (lowercase)
-  overrides: Record<string, string>  // toolId → replacement toolId
-}> = [
-  // GPT-4 and oss variants use edit/write (not apply_patch) — default behavior
-  { modelPattern: "gpt-4", overrides: {} },
-  { modelPattern: "oss", overrides: {} },
-  // Other GPT models (gpt-4o, gpt-4.1, etc.) use apply_patch instead of edit/write
-  { modelPattern: "gpt-", overrides: { edit: "apply_patch", write: "apply_patch" } },
-]
 
 export function renderWorkflowCatalog(): string {
   const list = BuiltinWorkflow.list()
@@ -353,14 +335,6 @@ export const layer = Layer.effect(
     })
 
     const tools: Interface["tools"] = Effect.fn("ToolRegistry.tools")(function* (input) {
-      const modelID = input.modelID.toLowerCase()
-      // Resolve model-level tool overrides: first matching pattern wins.
-      // E.g. GPT-4o { edit → apply_patch, write → apply_patch } means edit/write
-      // are hidden and apply_patch is shown instead. Empty overrides = default behavior.
-      const activeOverrides = modelToolOverrides
-        .filter((entry) => modelID.includes(entry.modelPattern))
-        .at(0)?.overrides
-
       let filtered = (yield* all()).filter((tool) => {
         if (tool.id === CodeSearchTool.id || tool.id === WebSearchTool.id) {
           if (tool.id === WebSearchTool.id) {
@@ -373,14 +347,10 @@ export const layer = Layer.effect(
           return input.providerID === ProviderID.opencode || Flag.MIMOCODE_ENABLE_EXA
         }
 
-        // Default: show edit/write, hide apply_patch
-        // With overrides: show apply_patch, hide edit/write
-        if (tool.id === ApplyPatchTool.id) {
-          return Object.values(activeOverrides ?? {}).includes("apply_patch")
-        }
-        if (tool.id === EditTool.id || tool.id === WriteTool.id) {
-          return !(activeOverrides?.[tool.id])
-        }
+        const usePatch =
+          input.modelID.includes("gpt-") && !input.modelID.includes("oss") && !input.modelID.includes("gpt-4")
+        if (tool.id === ApplyPatchTool.id) return usePatch
+        if (tool.id === EditTool.id || tool.id === WriteTool.id) return !usePatch
 
         return true
       })
@@ -409,13 +379,12 @@ export const layer = Layer.effect(
           }
           yield* plugin.trigger("tool.definition", { toolID: tool.id }, output)
           const style = resolveStyle(tool.id)
-          // 通用 shell 解析器：对所有工具自动生效，无需手工 shell 字段
-          const genericParser = tool.shell ?? createShellParser(tool.parameters)
-          const useShell = style === "shell"
-          // shell 描述优先级：.shell.txt > 自动生成 > fallback
-          const shellDesc = SHELL_DESCRIPTIONS[tool.id] ?? genericParser.description
-          const description = useShell ? shellDesc : output.description
-          const effective: Tool.Def = useShell ? shellWrap(tool, genericParser) : tool
+          const useShell = style === "shell" && tool.shell !== undefined
+          if (style === "shell" && !tool.shell) {
+            warnShellFallbackOnce(tool.id)
+          }
+          const effective: Tool.Def = useShell ? shellWrap(tool) : tool
+          const description = useShell ? tool.shell!.description : output.description
           return {
             id: tool.id,
             description: [

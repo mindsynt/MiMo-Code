@@ -147,13 +147,6 @@ export interface SpawnInput {
   forkContext?: ForkContext // NEW
   lifecycle?: Lifecycle
   /**
-   * Parent agent's type name. When set, the child agent's effective permission
-   * is merged with the parent's `hardPermission` so subagents cannot silently
-   * loosen the parent's non-negotiable restrictions (e.g. plan mode's edit
-   * block). The actor tool populates this from the spawning agent's context.
-   */
-  parentAgentType?: string
-  /**
    * Optional structured-output format. When set to a json_schema format, the
    * child's SessionPrompt.prompt requests structured output: the runLoop injects
    * the StructuredOutput tool, forces toolChoice=required, and the validated
@@ -233,7 +226,6 @@ export const layer = Layer.effect(
       source: "spawn" | "hook"
       provenance?: MessageV2.Provenance
       format?: MessageV2.OutputFormat
-      permissionOverride?: Permission.Ruleset
     }) {
       const result = yield* sessionPrompt.prompt({
         sessionID: input.sessionID,
@@ -245,7 +237,6 @@ export const layer = Layer.effect(
         task_id: input.task_id,
         parts: [{ type: "text", text: input.task }],
         ...(input.format ? { format: input.format } : {}),
-        ...(input.permissionOverride ? { permissionOverride: input.permissionOverride } : {}),
       })
       // structured output (json_schema) takes precedence over finalText: when the
       // child produced a validated object it IS the authoritative result and the
@@ -274,8 +265,6 @@ export const layer = Layer.effect(
       model?: { providerID: ProviderID; modelID: ModelID }
       lifecycle: "ephemeral" | "persistent"
       task_id?: string
-      /** Parent agent's hardPermission to enforce on the child subagent */
-      permissionOverride?: Permission.Ruleset
       // True for non-specialized subagents (those that received
       // RETURN_FORMAT_INSTRUCTION). Only these are subject to the completion
       // gate; specialized/system agents and peers create no user tasks.
@@ -722,22 +711,6 @@ export const layer = Layer.effect(
         agentInfo?.mode === "subagent" && !agentInfo?.prompt && input.agentType !== "checkpoint-writer"
       const taskWithFormat = gateEligible ? input.task + RETURN_FORMAT_INSTRUCTION : input.task
 
-      // 权限继承：获取父 agent 的 hardPermission，合并到子 agent 的权限中
-      // 确保子 agent 不能绕过父 agent 的不可覆盖限制（如 plan 模式的 edit 阻止）
-      let permissionOverride: Permission.Ruleset | undefined
-      if (input.parentAgentType) {
-        const parentOpt = yield* Effect.option(agents.get(input.parentAgentType))
-        const parentHard = parentOpt._tag === "Some" ? parentOpt.value.hardPermission : undefined
-        if (parentHard && parentHard.length > 0) {
-          permissionOverride = parentHard
-          log.info("enforcing parent hardPermission on subagent", {
-            parent: input.parentAgentType,
-            child: input.agentType,
-            rules: parentHard.length,
-          })
-        }
-      }
-
       const { fiber, outcome } = yield* forkWork({
         sessionID: input.sessionID,
         parentSessionID: input.parentSessionID ?? input.sessionID,
@@ -752,7 +725,6 @@ export const layer = Layer.effect(
         task_id: input.task_id,
         gateEligible,
         format: input.format,
-        ...(permissionOverride ? { permissionOverride } : {}),
       })
       if (input.onReady) yield* Effect.ignore(input.onReady({ actorID, sessionID: input.sessionID }))
       if (!input.background) yield* Fiber.join(fiber).pipe(Effect.ignore)

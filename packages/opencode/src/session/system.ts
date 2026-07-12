@@ -14,7 +14,6 @@ import PROMPT_DEEPSEEK from "./prompt/deepseek.txt"
 import PROMPT_GLM from "./prompt/glm.txt"
 import PROMPT_MINIMAX from "./prompt/minimax.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
-import COMMON from "./prompt/common.txt"
 import { Provider } from "@/provider"
 import { sortVisionModels } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
@@ -74,7 +73,6 @@ export const layer = Layer.effect(
             `</env>`,
           ].join("\n"),
           `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`,
-          COMMON,
         ]
         if (!model.capabilities.input.image) {
           // NOTE: vision models are resolved per-call (lazy). If provider list changes

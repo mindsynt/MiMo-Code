@@ -7,7 +7,7 @@ interface InteractiveSessionProps {
   id: string
   api: string
   info: Session.Info
-  messages: Record<string, string>
+  messages: { locale: string } & Record<string, string>
 }
 
 export function InteractiveSession(props: InteractiveSessionProps) {

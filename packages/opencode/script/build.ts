@@ -53,7 +53,9 @@ const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const plugin = createSolidTransformPlugin()
-const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+// const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+// Web UI temporarily disabled
+const skipEmbedWebUi = true
 
 const createEmbeddedWebUIBundle = async () => {
   console.log(`Building Web UI to embed in the binary`)

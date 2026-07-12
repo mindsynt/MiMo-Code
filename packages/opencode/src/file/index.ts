@@ -10,7 +10,6 @@ import fuzzysort from "fuzzysort"
 import ignore from "ignore"
 import path from "path"
 import z from "zod"
-import fs from "node:fs/promises"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Log } from "../util"
@@ -37,7 +36,6 @@ export const Node = z
     absolute: z.string(),
     type: z.enum(["file", "directory"]),
     ignored: z.boolean(),
-    mtime: z.number().optional(),
   })
   .meta({
     ref: "FileNode",
@@ -607,18 +605,12 @@ export const layer = Layer.effect(
         const absolute = path.join(resolved, entry.name)
         const file = path.relative(ctx.directory, absolute)
         const type = entry.type === "directory" ? "directory" : "file"
-        let mtime: number | undefined
-        if (type === "file") {
-          const stat = yield* Effect.tryPromise(() => fs.stat(absolute)).pipe(Effect.catch(() => Effect.void))
-          mtime = stat?.mtimeMs
-        }
         nodes.push({
           name: entry.name,
           path: file,
           absolute,
           type,
           ignored: ignored(type === "directory" ? file + "/" : file),
-          mtime,
         })
       }
       return nodes.sort((a, b) => {
