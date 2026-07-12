@@ -174,12 +174,12 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         Boolean(yield* dep.auth(input.id)) ||
         Boolean((yield* dep.config()).provider?.["opencode"]?.options?.apiKey)
 
-      // Never surface the free/public tier (cost.input === 0). Without a
-      // subscription/key, hide the remaining (paid) models too — they can't be
-      // used unauthenticated. So: authenticated -> subscription models only,
-      // unauthenticated -> nothing.
+      // Without a subscription/key, hide paid models — they can't be used
+      // unauthenticated. Free/public tier (cost.input === 0) is always shown
+      // so the model picker offers usable defaults even without auth.
+      // Authenticated: show everything.
       for (const [key, value] of Object.entries(input.models)) {
-        if (!ok || value.cost.input === 0) delete input.models[key]
+        if (!ok && value.cost.input > 0) delete input.models[key]
       }
 
       return {
@@ -1102,6 +1102,39 @@ const layer: Layer.Layer<
         const modelsDev = yield* Effect.promise(() => ModelsDev.get())
         const database = mapValues(modelsDev, fromModelsDevProvider)
 
+        // mimo-auto is a free-tier routing alias absent from models.dev; inject
+        // it here so the default fallback and model picker work without config.
+        const mimoDev = database[ProviderID.make("mimo")]
+        if (mimoDev) {
+          const firstModel = Object.values(mimoDev.models)[0]
+          mimoDev.models[ModelID.make("mimo-auto")] = {
+            id: ModelID.make("mimo-auto"),
+            providerID: ProviderID.make("mimo"),
+            name: "MiMo Auto",
+            api: {
+              id: "mimo-auto",
+              url: firstModel?.api.url ?? "",
+              npm: "@ai-sdk/openai-compatible",
+            },
+            status: "active",
+            headers: {},
+            options: {},
+            cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+            limit: { context: 1_000_000, output: 4_096 },
+            capabilities: {
+              temperature: true,
+              reasoning: false,
+              attachment: false,
+              toolcall: true,
+              input: { text: true, audio: false, image: true, video: false, pdf: false },
+              output: { text: true, audio: false, image: false, video: false, pdf: false },
+              interleaved: false,
+            },
+            release_date: "",
+            variants: {},
+          }
+        }
+
         const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
         const languages = new Map<string, LanguageModelV3>()
         const modelLoaders: {
@@ -1508,7 +1541,7 @@ const layer: Layer.Layer<
         const userChunkTimeout = options["chunkTimeout"]
         const chunkTimeout =
           typeof userChunkTimeout === "number"
-            ? userChunkTimeout  // user-set value (incl. 0 / negative to disable)
+            ? userChunkTimeout // user-set value (incl. 0 / negative to disable)
             : DEFAULT_CHUNK_TIMEOUT
         delete options["chunkTimeout"]
 
@@ -1759,7 +1792,17 @@ const layer: Layer.Layer<
       }
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, getVisionModel, defaultModel, resolveModelRef })
+    return Service.of({
+      list,
+      getProvider,
+      getModel,
+      getLanguage,
+      closest,
+      getSmallModel,
+      getVisionModel,
+      defaultModel,
+      resolveModelRef,
+    })
   }),
 )
 

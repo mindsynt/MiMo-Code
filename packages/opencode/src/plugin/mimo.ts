@@ -91,6 +91,9 @@ export async function MimoAuthPlugin(_input: PluginInput): Promise<Hooks> {
       // api: https://api.xiaomimimo.com/v1) — hardcoding "MiMo" here collided with
       // the free "mimo" provider's display name and confused users.
       input.provider.xiaomi ??= {}
+      // Register "mimo" so its free models (including the injected mimo-auto)
+      // show up in the model picker even without login/auth.
+      input.provider.mimo ??= {}
       // Both "opencode" and "opencode-go" stay enabled. The opencode custom
       // loader strips the free/public tier (and hides paid models until the
       // user authenticates). "opencode-go" has no free models and no custom
@@ -126,10 +129,13 @@ export async function MimoAuthPlugin(_input: PluginInput): Promise<Hooks> {
             openBrowser(authUrl)
 
             const serverCallbackPromise = new Promise<{ sk?: string; uid: string; url?: string }>((resolve, reject) => {
-              const timeout = setTimeout(() => {
-                server.close()
-                reject(new Error("Authorization timeout"))
-              }, 5 * 60 * 1000)
+              const timeout = setTimeout(
+                () => {
+                  server.close()
+                  reject(new Error("Authorization timeout"))
+                },
+                5 * 60 * 1000,
+              )
 
               server.on("request", (req, res) => {
                 const url = new URL(req.url || "/", `http://localhost`)
@@ -139,7 +145,9 @@ export async function MimoAuthPlugin(_input: PluginInput): Promise<Hooks> {
 
                 if (!u) {
                   log.warn("mimo oauth callback missing u param")
-                  res.writeHead(302, { Location: `${PLATFORM_URL}/authorize/callback?status=error&message=missing_data` })
+                  res.writeHead(302, {
+                    Location: `${PLATFORM_URL}/authorize/callback?status=error&message=missing_data`,
+                  })
                   res.end()
                   reject(new Error("Missing encrypted data"))
                   return
@@ -154,7 +162,9 @@ export async function MimoAuthPlugin(_input: PluginInput): Promise<Hooks> {
                   resolve(result)
                 } catch (err) {
                   log.error("mimo oauth decrypt failed", { error: err })
-                  res.writeHead(302, { Location: `${PLATFORM_URL}/authorize/callback?status=error&message=decrypt_failed` })
+                  res.writeHead(302, {
+                    Location: `${PLATFORM_URL}/authorize/callback?status=error&message=decrypt_failed`,
+                  })
                   res.end()
                   reject(new Error("Decryption failed"))
                 }
@@ -220,19 +230,27 @@ export async function AnthropicProxyPlugin(_input: PluginInput): Promise<Hooks> 
             let buffer = ""
             const body = new ReadableStream<Uint8Array>({
               async pull(ctrl) {
-                if (done) { ctrl.close(); return }
+                if (done) {
+                  ctrl.close()
+                  return
+                }
                 const chunk = await reader.read()
-                if (chunk.done) { ctrl.close(); return }
+                if (chunk.done) {
+                  ctrl.close()
+                  return
+                }
                 ctrl.enqueue(chunk.value)
                 buffer += decoder.decode(chunk.value, { stream: true })
-                if (buffer.includes("\nevent: message_stop\n") || buffer.includes("\ndata: {\"type\":\"message_stop\"}")) {
+                if (buffer.includes("\nevent: message_stop\n") || buffer.includes('\ndata: {"type":"message_stop"}')) {
                   done = true
                   void reader.cancel()
                   ctrl.close()
                 }
                 if (buffer.length > 512) buffer = buffer.slice(-256)
               },
-              cancel() { reader.cancel() },
+              cancel() {
+                reader.cancel()
+              },
             })
             return new Response(body, { headers: res.headers, status: res.status })
           },
