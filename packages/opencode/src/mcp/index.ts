@@ -136,6 +136,40 @@ function isMcpConfigured(entry: McpEntry): entry is ConfigMCP.Info {
 
 const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "_")
 
+/**
+ * Keyword-match a user query against MCP tool names+descriptions.
+ * Name hits score 3× description hits so an exact name match dominates.
+ * Returns up to `topN` results sorted by descending score.
+ */
+function matchTools(
+  defs: Record<string, MCPToolDef[]>,
+  query: string,
+  topN: number,
+): Array<{ server: string; name: string; key: string }> {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+
+  const results: Array<{ server: string; name: string; key: string; score: number }> = []
+
+  for (const [server, tools] of Object.entries(defs)) {
+    for (const tool of tools) {
+      let score = 0
+      const name = tool.name.toLowerCase()
+      const desc = (tool.description ?? "").toLowerCase()
+      for (const token of tokens) {
+        if (name.startsWith(token)) score += 5
+        else if (name.includes(token)) score += 3
+        if (desc.includes(token)) score += 1
+      }
+      if (score > 0) {
+        results.push({ server, name: tool.name, key: sanitize(server) + "_" + sanitize(tool.name), score })
+      }
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, topN)
+}
+
 // Convert MCP tool definition to AI SDK Tool type
 function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout?: number): Tool {
   const inputSchema = mcpTool.inputSchema
@@ -223,12 +257,15 @@ interface State {
   status: Record<string, Status>
   clients: Record<string, MCPClient>
   defs: Record<string, MCPToolDef[]>
+  sessionTools: Map<string, Set<string>>
 }
 
 export interface Interface {
   readonly status: () => Effect.Effect<Record<string, Status>>
   readonly clients: () => Effect.Effect<Record<string, MCPClient>>
   readonly tools: () => Effect.Effect<Record<string, Tool>>
+  readonly sessionTools: (sessionID: string, query?: string) => Effect.Effect<Record<string, Tool>>
+  readonly discoverTools: (sessionID: string, query: string) => Effect.Effect<readonly { key: string; name: string; description: string }[]>
   readonly prompts: () => Effect.Effect<Record<string, PromptInfo & { client: string }>>
   readonly resources: () => Effect.Effect<Record<string, ResourceInfo & { client: string }>>
   readonly add: (name: string, mcp: ConfigMCP.Info) => Effect.Effect<{ status: Record<string, Status> | Status }>
@@ -502,6 +539,7 @@ export const layer = Layer.effect(
           status: {},
           clients: {},
           defs: {},
+          sessionTools: new Map(),
         }
 
         yield* Effect.forEach(
@@ -553,6 +591,16 @@ export const layer = Layer.effect(
             pendingOAuthTransports.clear()
           }),
         )
+
+        // Keep sessionTools bounded: remove the entry when a session is deleted.
+        // Subscribe via subscribeAllCallback to avoid a circular dependency
+        // (MCP → Session → SessionPrompt → MCP).
+        yield* bus.subscribeAllCallback((evt: unknown) => {
+          const deleted = evt as { type: string; properties: { sessionID?: string } }
+          if (deleted.type === "session.deleted" && deleted.properties?.sessionID) {
+            s.sessionTools.delete(deleted.properties.sessionID)
+          }
+        }).pipe(Effect.forkScoped)
 
         return s
       }),
@@ -670,6 +718,81 @@ export const layer = Layer.effect(
         { concurrency: "unbounded" },
       )
       return result
+    })
+
+    const sessionTools = Effect.fn("MCP.sessionTools")(function* (sessionID: string, query?: string) {
+      const result: Record<string, Tool> = {}
+      const s = yield* InstanceState.get(state)
+
+      let names = s.sessionTools.get(sessionID)
+      if (!names) {
+        names = new Set()
+        s.sessionTools.set(sessionID, names)
+      }
+
+      // First call for this session: seed from the user query.
+      // Keyword hits → load matched tools (narrow, precise).
+      // No hits → load ALL tools (full fallback, e.g. Chinese queries).
+      let attemptedSeed = false
+      if (names.size === 0 && query) {
+        attemptedSeed = true
+        const matched = matchTools(s.defs, query, 5)
+        for (const m of matched) names.add(m.key)
+      }
+
+      const cfg = yield* cfgSvc.get()
+      const config = cfg.mcp ?? {}
+      const defaultTimeout = cfg.experimental?.mcp_timeout
+
+      const connectedClients = Object.entries(s.clients).filter(
+        ([clientName]) => s.status[clientName]?.status === "connected",
+      )
+
+      // Seed produced no hits → fall back to full set
+      const loadAll = attemptedSeed && names.size === 0
+
+      yield* Effect.forEach(
+        connectedClients,
+        ([clientName, client]) =>
+          Effect.gen(function* () {
+            const mcpConfig = config[clientName]
+            const entry = mcpConfig && isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+            const timeout = entry?.timeout ?? defaultTimeout
+            const listed = s.defs[clientName]
+            if (!listed) return
+
+            for (const mcpTool of listed) {
+              const key = sanitize(clientName) + "_" + sanitize(mcpTool.name)
+              if (loadAll || names.has(key)) {
+                result[key] = convertMcpTool(mcpTool, client, timeout)
+              }
+            }
+          }),
+        { concurrency: "unbounded" },
+      )
+      return result
+    })
+
+    const discoverTools = Effect.fn("MCP.discoverTools")(function* (sessionID: string, query: string) {
+      const s = yield* InstanceState.get(state)
+
+      let names = s.sessionTools.get(sessionID)
+      if (!names) {
+        names = new Set()
+        s.sessionTools.set(sessionID, names)
+      }
+
+      const matched = matchTools(s.defs, query, 5)
+      const out: Array<{ key: string; name: string; description: string }> = []
+
+      for (const m of matched) {
+        if (names.has(m.key)) continue
+        names.add(m.key)
+        const def = s.defs[m.server]?.find((t) => t.name === m.name)
+        out.push({ key: m.key, name: `${m.server}/${m.name}`, description: def?.description ?? "" })
+      }
+
+      return out
     })
 
     function collectFromConnected<T extends { name: string }>(
@@ -906,6 +1029,8 @@ export const layer = Layer.effect(
       status,
       clients,
       tools,
+      sessionTools,
+      discoverTools,
       prompts,
       resources,
       add,

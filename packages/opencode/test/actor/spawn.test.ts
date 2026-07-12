@@ -92,6 +92,8 @@ const mcp = Layer.succeed(
     removeAuth: () => Effect.void,
     supportsOAuth: () => Effect.succeed(false),
     hasStoredTokens: () => Effect.succeed(false),
+    sessionTools: () => Effect.succeed({}),
+    discoverTools: () => Effect.succeed([]),
     getAuthStatus: () => Effect.succeed("not_authenticated" as const),
   }),
 )

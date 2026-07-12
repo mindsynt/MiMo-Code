@@ -1012,7 +1012,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         })
       }
 
-      for (const [key, item] of Object.entries(yield* mcp.tools())) {
+      // Session-scoped MCP tools: seed from first user query,
+      // grow monotonically via mcp_discover.
+      const mcpSessionId = input.session.id
+      const mcpQuery = input.messages
+        .filter((m) => m.info.role === "user")
+        .at(0)
+        ?.parts
+      const mcpSeedQuery = mcpQuery ? userQueryText(mcpQuery).slice(0, 500) : undefined
+      for (const [key, item] of Object.entries(yield* mcp.sessionTools(mcpSessionId, mcpSeedQuery))) {
         const execute = item.execute
         if (!execute) continue
 
@@ -1146,6 +1154,41 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           )
         tools[key] = item
       }
+
+      // mcp_discover: let the model find and activate MCP tools mid-session.
+      // This is a lightweight meta-tool that searches tool descriptions by
+      // keyword and adds matches to the session's loaded set for future turns.
+      tools["mcp_discover"] = tool({
+        description: [
+          "Search and activate MCP tools that match your current task.",
+          "Use this when you need a capability that isn't already available as a tool.",
+          "Describe what you want to do, and matching MCP tools will be activated for this session.",
+        ].join(" "),
+        inputSchema: jsonSchema({
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Describe what capability you need (e.g. \"query a database\", \"send an email\")",
+            },
+          },
+          required: ["query"],
+        }),
+        execute: (args: { query: string }) =>
+          run.promise(
+            mcp.discoverTools(mcpSessionId, args.query).pipe(
+              Effect.map((hits) => {
+                if (hits.length === 0) return "No matching MCP tools found."
+                return [
+                  "The following MCP tools have been activated for this session:",
+                  ...hits.map((t) => `  - ${t.name}: ${t.description}`),
+                  "",
+                  "They will be available starting from your next step.",
+                ].join("\n")
+              }),
+            ),
+          ),
+      })
 
       return tools
     })
