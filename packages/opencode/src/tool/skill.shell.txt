@@ -1,0 +1,8 @@
+Execute a named skill (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# run a skill:
+    skill <name>
+
+Available skills are listed in the system prompt.

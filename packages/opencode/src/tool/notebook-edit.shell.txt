@@ -1,0 +1,25 @@
+Edit a Jupyter notebook cell (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# replace a cell:
+    notebook-edit <path> --cell-id <id> [--cell-type code|markdown] <<SOURCE
+    new cell source code
+    SOURCE
+
+# insert a cell after an existing cell:
+    notebook-edit <path> --cell-id <id> --cell-type code --edit-mode insert <<SOURCE
+    new cell content
+    SOURCE
+
+# delete a cell:
+    notebook-edit <path> --cell-id <id> --edit-mode delete
+
+--cell-id comes from the Read tool's `<cell id="...">` output.
+For insert mode, the new cell is added after the cell with --cell-id.
+
+Examples:
+    notebook-edit /notebook.ipynb --cell-id cell_abc123 --edit-mode delete
+    notebook-edit /notebook.ipynb --cell-id cell_abc123 --cell-type code <<SOURCE
+    print("hello world")
+    SOURCE

@@ -1,0 +1,29 @@
+Orchestrate multi-agent workflows (shell form). Run/status/wait.
+
+Script structure: same as other shell-mode tools.
+
+# run a workflow:
+    workflow run [--name <workflow_name>] [--script <inline_js>] [--args '<json>'] [--workspace <dir>] [--async]
+
+# check status:
+    workflow status <run_id>
+
+# wait for completion:
+    workflow wait <run_id> [--timeout <ms>]
+
+Provide EITHER --name OR --script, not both.
+Use --async to run in the background (result arrives as notification).
+Without --async, blocks until terminal and returns the transcript inline.
+
+Built-in workflow names: deep-research, code-review, verify, simplify, etc.
+
+Examples:
+    workflow run --name deep-research --args '{"question":"What are the latest React patterns?"}'
+    workflow run --script "..." --async
+    workflow status wf_abc123
+    workflow wait wf_abc123 --timeout 300000
+
+# WRONG — JSON fields directly, will fail:
+#   {"operation":"run","name":"deep-research"}  ✗
+# RIGHT:
+#   workflow run --name deep-research   ✓

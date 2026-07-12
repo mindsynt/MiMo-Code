@@ -1,0 +1,14 @@
+Read a file from the filesystem (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# read a file (with optional line range):
+    read <file_path> [--offset <n>] [--limit <n>]
+
+# read a directory listing:
+    read <directory_path>
+
+Examples:
+    read /src/index.ts
+    read /src/index.ts --offset 50 --limit 100
+    read /src/components/

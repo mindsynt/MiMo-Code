@@ -1,0 +1,10 @@
+Fetch a URL and extract readable content (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# fetch a URL:
+    webfetch <url> [--prompt <query>]
+
+Examples:
+    webfetch https://example.com
+    webfetch https://docs.python.org/3/library/ --prompt "list available modules"

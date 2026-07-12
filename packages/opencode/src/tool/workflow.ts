@@ -1,5 +1,6 @@
 import * as Tool from "./tool"
 import DESCRIPTION from "./workflow.txt"
+import SHELL_DESCRIPTION from "./workflow.shell.txt"
 import z from "zod"
 import { Effect, Fiber } from "effect"
 import { Config } from "../config"
@@ -8,6 +9,7 @@ import { InstanceState } from "@/effect"
 import { workflowRef } from "@/workflow/runtime-ref"
 import { BuiltinWorkflow } from "@/workflow/builtin"
 import type { SessionID } from "../session/schema"
+import { tokenize } from "./shell-tokenize"
 
 const id = "workflow"
 
@@ -68,6 +70,106 @@ export const parameters = z.discriminatedUnion("operation", [
   cancelSchema,
   resumeSchema,
 ])
+
+// --- Shell mode parser ---
+
+const WORKFLOW_KNOWN_VERBS = ["run", "status", "wait", "cancel", "resume"]
+
+type WorkflowShellArgs = z.infer<typeof parameters>
+
+function extractWorkflowFlags(
+  args: string[],
+  names: string[],
+  line: number,
+): Effect.Effect<{ flags: Record<string, string>; rest: string[] }, { kind: "flag"; line: number; detail: string }> {
+  const rest: string[] = []
+  const flags: Record<string, string> = {}
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    const bare = names.find((n) => a === `--${n}`)
+    if (bare) {
+      const next = args[i + 1]
+      if (next === undefined)
+        return Effect.fail({ kind: "flag" as const, line, detail: `workflow: --${bare} requires a value` })
+      flags[bare] = next
+      i++
+      continue
+    }
+    const eq = names.find((n) => a.startsWith(`--${n}=`))
+    if (eq) {
+      const v = a.slice(`--${eq}=`.length)
+      if (v === "") return Effect.fail({ kind: "flag" as const, line, detail: `workflow: --${eq} requires a value` })
+      flags[eq] = v
+      continue
+    }
+    rest.push(a)
+  }
+  return Effect.succeed({ flags, rest })
+}
+
+function parseWorkflowScript(script: string): Effect.Effect<WorkflowShellArgs[], unknown> {
+  return Effect.gen(function* () {
+    const argvList = yield* tokenize(script)
+    const out: WorkflowShellArgs[] = []
+    for (const argv of argvList) {
+      const [verb, ...rest] = argv.tokens
+      if (!verb || verb === "") continue
+      if (!WORKFLOW_KNOWN_VERBS.includes(verb)) {
+        return yield* Effect.fail({
+          kind: "unknown-verb" as const,
+          line: argv.line,
+          detail: `workflow: unknown verb "${verb}". Expected one of: ${WORKFLOW_KNOWN_VERBS.join(", ")}`,
+        })
+      }
+      switch (verb) {
+        case "run": {
+          const { flags } = yield* extractWorkflowFlags(
+            rest,
+            ["name", "script", "args", "workspace"],
+            argv.line,
+          )
+          const entry: WorkflowShellArgs = {
+            operation: "run",
+            ...(flags.name && { name: flags.name }),
+            ...(flags.script && { script: flags.script }),
+            ...(flags.args && { args: parseComposeArgString(flags.args) }),
+            ...(flags.workspace && { workspace: flags.workspace }),
+          } as WorkflowShellArgs
+          out.push(entry)
+          break
+        }
+        case "status":
+        case "wait":
+        case "cancel":
+        case "resume": {
+          if (rest.length !== 1) {
+            return yield* Effect.fail({
+              kind: "arity" as const,
+              line: argv.line,
+              detail: `workflow: ${verb} <run_id>`,
+            })
+          }
+          const entry: WorkflowShellArgs = {
+            operation: verb as "status" | "wait" | "cancel" | "resume",
+            run_id: rest[0],
+          } as WorkflowShellArgs
+          out.push(entry)
+          break
+        }
+      }
+    }
+    return out
+  })
+}
+
+function recoverWorkflowArgs(rawArgs: unknown): WorkflowShellArgs | undefined {
+  if (rawArgs == null || typeof rawArgs !== "object") return undefined
+  const obj = rawArgs as Record<string, unknown>
+  if (typeof obj.operation === "string" && WORKFLOW_KNOWN_VERBS.includes(obj.operation)) {
+    return rawArgs as WorkflowShellArgs
+  }
+  return undefined
+}
 
 type TranscriptEntry = { kind: "phase" | "log"; text: string }
 // `counters` and `currentPhase` are streamed in each flush so the inline
@@ -352,6 +454,11 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
       parameters,
       execute: (input: z.infer<typeof parameters>, ctx: Tool.Context<Metadata>) =>
         run(input, ctx).pipe(Effect.scoped, Effect.orDie),
+      shell: {
+        description: SHELL_DESCRIPTION,
+        parse: parseWorkflowScript,
+        recover: recoverWorkflowArgs,
+      },
     } satisfies Tool.DefWithoutID<typeof parameters, Metadata>
   }),
 )

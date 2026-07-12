@@ -1,0 +1,9 @@
+Plan mode entry and exit tools (shell form). These are toggles, not data operations.
+
+# enter plan mode:
+    plan_enter
+
+# exit plan mode:
+    plan_exit
+
+No arguments needed. Plan mode restricts file editing tools.

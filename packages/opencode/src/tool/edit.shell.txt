@@ -1,0 +1,30 @@
+Replace text in a file using string substitution (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# replace old_string with new_string:
+    edit <file_path> "<old_string>" "<new_string>" [--replace-all]
+
+# for multi-line strings, use heredoc for both the old and new content:
+    edit <file_path> <<OLD
+old content (multi-line)
+OLD
+<<NEW
+new content (multi-line)
+NEW
+[--replace-all]
+
+Examples:
+    edit /foo.ts "const x = 1" "const x = 2"
+    edit /foo.ts <<OLD
+    function oldVersion() {
+      return 1
+    }
+    OLD
+    <<NEW
+    function newVersion() {
+      return 2
+    }
+    NEW
+
+Alias: use apply_patch for diff-based edits (structural changes).

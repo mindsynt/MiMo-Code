@@ -1,0 +1,17 @@
+Switch the working directory for the current session (like cd in a terminal) (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# switch directory:
+    change_directory <path>
+
+Use an absolute path, or a relative path resolved from the current directory.
+Pass "~" to reset to the project root.
+
+After calling this, subsequent file operations resolve from the new directory.
+Subagents inherit the changed directory.
+
+Examples:
+    change_directory /src/app
+    change_directory packages/web/src
+    change_directory ~

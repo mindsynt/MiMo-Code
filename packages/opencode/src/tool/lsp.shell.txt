@@ -1,0 +1,21 @@
+LSP (Language Server Protocol) operation (shell form). Inspect code at a specific position.
+
+Script structure: same as other shell-mode tools.
+
+# LSP operations:
+    lsp goToDefinition <file_path> <line> <character>
+    lsp findReferences <file_path> <line> <character>
+    lsp hover <file_path> <line> <character>
+    lsp documentSymbol <file_path> <line> <character>
+    lsp workspaceSymbol <file_path> <line> <character>
+    lsp goToImplementation <file_path> <line> <character>
+    lsp prepareCallHierarchy <file_path> <line> <character>
+    lsp incomingCalls <file_path> <line> <character>
+    lsp outgoingCalls <file_path> <line> <character>
+
+Line and character are 1-based (as shown in editors).
+
+Examples:
+    lsp goToDefinition /src/index.ts 10 5
+    lsp hover /src/app.ts 42 15
+    lsp findReferences /src/utils.ts 100 8

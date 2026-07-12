@@ -17,6 +17,7 @@ import { Shell } from "@/shell/shell"
 import { SessionCwd } from "./session-cwd"
 import { BashArity } from "@/permission/arity"
 import * as Truncate from "./truncate"
+import { minimalProcessEnv } from "@/util/mimo-process"
 import { Plugin } from "@/plugin"
 import { Effect, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
@@ -24,6 +25,7 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import * as BashInteractive from "./bash-interactive"
 import * as BashTokenEfficient from "./bash_token_efficient_pipeline"
 import * as BashTokenEfficientHeuristic from "./bash_token_efficient_heuristic"
+import { parse as shellQuoteParse } from "shell-quote"
 
 const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.MIMOCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -116,6 +118,7 @@ type Scan = {
   patterns: Set<string>
   always: Set<string>
   deletes: Set<string>
+  dynamicPaths: Set<string>
 }
 
 type Chunk = {
@@ -182,6 +185,18 @@ function isDelete(tokens: string[], ps: boolean) {
     if (!flags) return false
     if (flags.size === 0) return true
     return tokens.slice(2).some((tok) => flags.has(tok))
+  }
+  // find -exec rm {} \; / find ... -delete 模式检测
+  // `find` 自身不是删除命令，但 -exec rm / -ok rm / -delete 等操作会删除文件
+  if (head === "find") {
+    const hasExecDelete = tokens.some(
+      (t, i) =>
+        (t === "-exec" || t === "-ok") &&
+        i + 1 < tokens.length &&
+        (tokens[i + 1] === "rm" || tokens[i + 1] === "rmdir" || tokens[i + 1] === "unlink"),
+    )
+    const hasDelete = tokens.includes("-delete")
+    if (hasExecDelete || hasDelete) return true
   }
   return false
 }
@@ -334,6 +349,81 @@ const parse = Effect.fn("BashTool.parse")(function* (command: string, ps: boolea
   return tree.rootNode
 })
 
+/**
+ * 校验 tree-sitter AST 和 shell-quote 解析结果是否一致。
+ * 两个解析器对同一 shell 命令的理解可能存在差异，攻击者可利用这种分歧绕过安全检查。
+ * 返回不一致的命令列表和详细信息。
+ */
+function validateParseConsistency(
+  command: string,
+  treeRoot: Node,
+): {
+  inconsistent: boolean
+  details: Array<{ treeSitter: string; shellQuote: string }>
+} {
+  const details: Array<{ treeSitter: string; shellQuote: string }> = []
+
+  // 从 tree-sitter AST 提取命令名
+  const tsCommands: string[] = []
+  for (const n of treeRoot.descendantsOfType("command")) {
+    const node = n
+    if (!node) continue
+    const cmdNode = node.childForFieldName("command")
+    if (cmdNode) tsCommands.push(cmdNode.text.trim())
+  }
+
+  // 用 shell-quote 解析同一命令
+  let sqTokens: string[]
+  try {
+    sqTokens = shellQuoteParse(command)
+      .filter((t): t is string => typeof t === "string")
+      .filter((t) => t.trim() !== "")
+  } catch {
+    // shell-quote 解析失败本身就是一个差异信号
+    if (tsCommands.length > 0) {
+      details.push({ treeSitter: tsCommands.join(" | "), shellQuote: "(parse error)" })
+    }
+    return { inconsistent: details.length > 0, details }
+  }
+
+  // 比较：提取 shell-quote 结果的"命令"部分（遇到 |、;、&&、|| 前的一个 token）
+  const sqCmds: string[] = []
+  let current: string[] = []
+  for (const t of sqTokens) {
+    if (["|", ";", "&&", "||"].includes(t)) {
+      if (current.length > 0) {
+        sqCmds.push(current[0])
+        current = []
+      }
+      continue
+    }
+    current.push(t)
+  }
+  if (current.length > 0) sqCmds.push(current[0])
+
+  // 比较命令数量和名称
+  const minLen = Math.min(tsCommands.length, sqCmds.length)
+  for (let i = 0; i < minLen; i++) {
+    if (tsCommands[i] !== sqCmds[i]) {
+      details.push({ treeSitter: tsCommands[i], shellQuote: sqCmds[i] })
+    }
+  }
+  if (tsCommands.length !== sqCmds.length) {
+    // 命令数量不一致：补充显示差异
+    if (tsCommands.length > sqCmds.length) {
+      for (let i = minLen; i < tsCommands.length; i++) {
+        details.push({ treeSitter: tsCommands[i], shellQuote: "(missing)" })
+      }
+    } else {
+      for (let i = minLen; i < sqCmds.length; i++) {
+        details.push({ treeSitter: "(missing)", shellQuote: sqCmds[i] })
+      }
+    }
+  }
+
+  return { inconsistent: details.length > 0, details }
+}
+
 const ask = Effect.fn("BashTool.ask")(function* (ctx: Tool.Context, scan: Scan) {
   if (scan.dirs.size > 0) {
     const globs = Array.from(scan.dirs).map((dir) => {
@@ -348,12 +438,19 @@ const ask = Effect.fn("BashTool.ask")(function* (ctx: Tool.Context, scan: Scan) 
     })
   }
 
-  if (scan.patterns.size === 0) return
+  // 包含动态路径的命令也应触发权限提示
+  const allPatterns = new Set(scan.patterns)
+  for (const src of scan.dynamicPaths) {
+    allPatterns.add(src)
+  }
+  if (allPatterns.size === 0) return
   yield* ctx.ask({
     permission: "bash",
-    patterns: Array.from(scan.patterns),
+    patterns: Array.from(allPatterns),
     always: Array.from(scan.always),
-    metadata: {},
+    metadata: {
+      ...(scan.dynamicPaths.size > 0 ? { dynamicPaths: true } : {}),
+    },
   })
 })
 
@@ -457,10 +554,12 @@ export const BashTool = Tool.define(
     const argPath = Effect.fn("BashTool.argPath")(function* (arg: string, cwd: string, ps: boolean, shell: string) {
       const text = ps ? expand(arg, cwd, shell) : home(unquote(arg))
       const file = text && prefix(text)
-      if (!file || dynamic(file, ps)) return
+      if (!file) return { resolved: undefined, dynamic: false }
+      if (dynamic(file, ps)) return { resolved: undefined, dynamic: true }
       const next = ps ? provider(file) : file
-      if (!next) return
-      return yield* resolvePath(next, cwd, shell)
+      if (!next) return { resolved: undefined, dynamic: false }
+      const resolved = yield* resolvePath(next, cwd, shell)
+      return { resolved, dynamic: false }
     })
 
     const collect = Effect.fn("BashTool.collect")(function* (root: Node, cwd: string, ps: boolean, shell: string) {
@@ -469,6 +568,7 @@ export const BashTool = Tool.define(
         patterns: new Set<string>(),
         always: new Set<string>(),
         deletes: new Set<string>(),
+        dynamicPaths: new Set<string>(),
       }
 
       for (const node of commands(root)) {
@@ -478,9 +578,13 @@ export const BashTool = Tool.define(
 
         if (cmd && FILES.has(cmd)) {
           for (const arg of pathArgs(command, ps)) {
-            const resolved = yield* argPath(arg, cwd, ps, shell)
-            log.info("resolved path", { arg, resolved })
-            if (!resolved || Instance.containsPath(resolved)) continue
+            const { resolved, dynamic: isDynamic } = yield* argPath(arg, cwd, ps, shell)
+            log.info("resolved path", { arg, resolved, dynamic: isDynamic })
+            if (!resolved) {
+              if (isDynamic) scan.dynamicPaths.add(source(node))
+              continue
+            }
+            if (Instance.containsPath(resolved)) continue
             const dir = (yield* fs.isDir(resolved)) ? resolved : path.dirname(resolved)
             scan.dirs.add(dir)
           }
@@ -504,7 +608,7 @@ export const BashTool = Tool.define(
         { env: {} },
       )
       return {
-        ...process.env,
+        ...minimalProcessEnv(),
         // Python ignores the console code page when stdout is a pipe and falls
         // back to the ANSI code page (GBK on zh-CN), producing mojibake. Force
         // UTF-8 for child Python processes on Windows.
@@ -759,6 +863,33 @@ export const BashTool = Tool.define(
               const root = yield* parse(params.command, ps)
               const scan = yield* collect(root, cwd, ps, shell)
               if (!Instance.containsPath(cwd)) scan.dirs.add(cwd)
+
+              // 解析器一致性校验：tree-sitter 和 shell-quote 的解析结果应一致
+              // 不一致可能表示攻击者利用解析器分歧绕过安全检查
+              const consistency = validateParseConsistency(params.command, root)
+              if (consistency.inconsistent) {
+                const detailStr = consistency.details
+                  .map((d) => `  tree-sitter: ${d.treeSitter}  vs  shell-quote: ${d.shellQuote}`)
+                  .join("\n")
+                log.warn("parse consistency check failed", {
+                  command: params.command,
+                  details: consistency.details,
+                })
+                if (scan.deletes.size > 0) {
+                  // 删除命令有解析分歧时，在输出中添加警告
+                  // forced-ask 删除确认已提供保护，用户看到警告后可取消操作
+                  ctx.metadata({
+                    metadata: {
+                      parserWarning: `解析器分歧检测到不一致，命令结构可能被误解：\n${detailStr}`,
+                    },
+                  })
+                } else if (!Flag.MIMOCODE_AUTO_APPROVE_DELETE) {
+                  // 非删除命令有解析分歧时，将命令标记为需要额外确认
+                  for (const src of scan.patterns) {
+                    scan.dynamicPaths.add(src)
+                  }
+                }
+              }
               // Delete-containing commands are authorized by askDelete alone —
               // the delete UI shows the full command (including any external
               // paths it touches), so a separate bash/external_directory

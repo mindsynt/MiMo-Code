@@ -1,0 +1,29 @@
+Execute a shell command in a persistent shell session (shell form).
+
+Be aware: OS, Shell are shown in the output.
+
+Script structure: same as other shell-mode tools.
+
+# run a command:
+    bash <command> [--workdir <dir>] [--timeout <ms>] [--interactive] [--description <text>]
+
+# avoid cd — use --workdir instead:
+    bash npm test --workdir /src/app
+
+# interactive commands (password, confirmation):
+    bash ssh user@host --interactive --description "SSH login"
+
+Examples:
+    bash ls -la
+    bash npm install --workdir /src/app
+    bash git status --description "Check git status"
+
+IMPORTANT: This tool is for terminal operations like git, npm, docker, etc.
+DO NOT use it for file operations — use read/write/edit instead.
+Use workdir instead of cd. Prefer parallel bash calls for independent commands.
+
+# WRONG — JSON-style fields, will fail:
+#   bash --command "ls -la"  ✗ (command is positional, not --flag)
+#   {"command":"ls -la"}  ✗ (script is required in shell mode)
+# RIGHT:
+#   bash ls -la   ✓

@@ -46,3 +46,8 @@ Jobs fire only while the REPL is idle; fires queue at 'later' priority.
 #   loop = cadence depends on what you observed; may change next turn
 
 # Don't list jobs in your reply — the UI renders them.
+
+# WRONG — JSON fields directly, will fail:
+#   {"operation":"schedule","cron":"*/5 * * * *","prompt":"/x"}  ✗
+# RIGHT:
+#   cron schedule "*/5 * * * *" "/x"   ✓

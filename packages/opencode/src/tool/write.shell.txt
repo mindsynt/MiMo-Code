@@ -1,0 +1,20 @@
+Write content to a file (shell form). Overwrites if exists.
+
+Script structure: same as other shell-mode tools.
+
+# write a file:
+    write <file_path> <content>
+
+# write multi-line content — use heredoc for verbatim text:
+    write <file_path> <<EOF
+    line1
+    line2
+    EOF
+
+Examples:
+    write /foo/bar.txt "hello world"
+    write /foo/bar.ts <<EOF
+    export function hello(): void {
+      console.log("hello")
+    }
+    EOF

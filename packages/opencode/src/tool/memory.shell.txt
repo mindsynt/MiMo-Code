@@ -1,0 +1,14 @@
+Memory search tool (shell form). Search across project/global memory.
+
+Script structure: same as other shell-mode tools.
+
+# search memory:
+    memory search <query> [--scope <s>] [--scope-id <id>] [--type <t>] [--limit <n>]
+
+Scope values: global | projects | sessions | cc
+Type values: pinned | snapshot | learning | progress | free (varies by scope)
+
+Examples:
+    memory search "authentication" --scope projects --limit 10
+    memory search "user preferences" --scope global
+    memory search "project context" --type learning

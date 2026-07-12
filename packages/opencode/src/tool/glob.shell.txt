@@ -1,0 +1,10 @@
+List files matching a glob pattern (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# glob for files:
+    glob <pattern> [--path <dir>]
+
+Examples:
+    glob "**/*.ts"
+    glob "src/**/*.spec.ts" --path /project

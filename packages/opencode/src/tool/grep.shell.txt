@@ -1,0 +1,11 @@
+Search file contents with a regex pattern (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# search for a pattern:
+    grep <pattern> [--path <dir>] [--include <glob>]
+
+Examples:
+    grep "function" --include "*.ts"
+    grep "TODO" --path /src
+    grep "require('express')" --include "*.{js,ts}"

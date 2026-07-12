@@ -55,3 +55,9 @@ Status values for `task list <status>`: open | in_progress | blocked | done | ab
 
 # Don't repeat the task tree in your reply — the UI already shows it.
 # Just summarize what you're working on or what changed.
+
+# WRONG — JSON fields directly, will fail:
+#   {"operation":"create","description":"Implement auth"}  ✗
+#   {"script":"task create \"Implement auth\""}  ✗ (script is plain text)
+# RIGHT:
+#   task create "Implement auth"   ✓

@@ -1,6 +1,9 @@
 import { Cause, Effect } from "effect"
 import z from "zod"
 import * as Tool from "./tool"
+import { Log } from "../util"
+
+const log = Log.create({ service: "shell-wrap" })
 
 export const shellInputSchema = z.object({
   script: z.string().min(1).describe(
@@ -20,11 +23,16 @@ type ShellInput = z.infer<typeof shellInputSchema>
 
 export function shellWrap<P extends z.ZodType, M extends Tool.Metadata>(
   def: Tool.Def<P, M>,
+  autoParser?: {
+    parse(script: string): Effect.Effect<z.infer<P>[], unknown>
+    description: string
+    recover?(rawArgs: unknown): z.infer<P> | undefined
+  },
 ): Tool.Def<typeof shellInputSchema, Tool.Metadata> {
-  if (!def.shell) {
-    throw new Error(`shellWrap called on tool '${def.id}' that has no shell field`)
+  const shell = def.shell ?? autoParser
+  if (!shell) {
+    throw new Error(`shellWrap called on tool '${def.id}' with no shell field and no autoParser`)
   }
-  const shell = def.shell
   return {
     id: def.id,
     description: shell.description,
@@ -43,12 +51,16 @@ export function shellWrap<P extends z.ZodType, M extends Tool.Metadata>(
           // the parsed shape, route to def.execute (which re-validates via zod).
           const recovered = shell.recover?.(args as unknown)
           if (recovered !== undefined) {
+            log.info(`${def.id}: shell-mode recovered from JSON-shape call`, {
+              toolId: def.id,
+              recoveredType: typeof recovered,
+            })
             const op = operationLabel(recovered)
             const exit = yield* Effect.exit(def.execute(recovered, ctx as Tool.Context))
             if (exit._tag === "Failure") {
               return {
                 title: `${def.id}: invalid arguments`,
-                output: formatFailedCommandNoVerb(jsonTeachingBody(def.id, describeFailure(exit.cause))),
+                output: formatFailedCommandNoVerb(shellTeachingBody(def.id, describeFailure(exit.cause))),
                 metadata: { commands: 0, success: 0 } as Tool.Metadata,
               }
             }
@@ -63,7 +75,8 @@ export function shellWrap<P extends z.ZodType, M extends Tool.Metadata>(
             }
           }
           const o = (typeof args === "object" && args ? args : {}) as Record<string, unknown>
-          const body = "script" in o ? shellTeachingBody(def.id) : jsonTeachingBody(def.id)
+          // shellWrap 内始终是 shell 模式，不引导模型用 JSON 格式
+          const body = shellTeachingBody(def.id)
           return {
             title: `${def.id}: missing script`,
             output: formatFailedCommandNoVerb(body),
@@ -106,6 +119,10 @@ export function shellWrap<P extends z.ZodType, M extends Tool.Metadata>(
             metadata: { commands: 0, success: 0 } as Tool.Metadata,
           }
         }
+        log.info(`${def.id}: parsed ${parsedList.length} command(s)`, {
+          toolId: def.id,
+          commandCount: parsedList.length,
+        })
         const blocks: string[] = []
         if (rescued) blocks.push(formatNotice(rescueNoticeBody(def.id)))
         let lastMetadata: Tool.Metadata = {}
@@ -118,6 +135,11 @@ export function shellWrap<P extends z.ZodType, M extends Tool.Metadata>(
           // `{ operation: { action: "create" } }` — see the `.meta` comment in task.ts).
           // Derive a string label for the output XML attribute from either shape.
           const operation = operationLabel(parsed)
+          log.info(`${def.id}: executing command #${i + 1}`, {
+            toolId: def.id,
+            commandIndex: i + 1,
+            operation,
+          })
           const exit = yield* Effect.exit(def.execute(parsed, ctx as Tool.Context))
           if (exit._tag === "Failure") {
             blocks.push(formatFailedCommand(i + 1, operation, describeFailure(exit.cause)))
@@ -208,11 +230,12 @@ function rescueNoticeBody(toolId: string): string {
   ].join("\n")
 }
 
-function shellTeachingBody(toolId: string): string {
+function shellTeachingBody(toolId: string, detail?: string): string {
   return [
     `${toolId}: this tool takes a single \`script\` string (shell-style), not JSON fields.`,
     `Put the command in \`script\`, e.g.:  ${toolId} <verb> ...`,
     `See the tool description for the verb list and examples.`,
+    ...(detail ? [`detail: ${detail}`] : []),
   ].join("\n")
 }
 

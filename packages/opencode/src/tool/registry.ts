@@ -64,6 +64,8 @@ import { TaskRegistry } from "@/task/registry"
 import { defaultLayer as SchedulerDefaultLayer } from "@/cron/scheduler"
 import { Auth } from "@/auth"
 import { shellWrap } from "./shell-wrap"
+import { createShellParser } from "./shell-parse-generic"
+import { SHELL_DESCRIPTIONS } from "./shell-descriptions"
 import * as BashInteractive from "./bash-interactive"
 import { resolveInvocationStyle } from "./invocation-style"
 import { BuiltinWorkflow } from "@/workflow/builtin"
@@ -407,12 +409,13 @@ export const layer = Layer.effect(
           }
           yield* plugin.trigger("tool.definition", { toolID: tool.id }, output)
           const style = resolveStyle(tool.id)
-          const useShell = style === "shell" && tool.shell !== undefined
-          if (style === "shell" && !tool.shell) {
-            warnShellFallbackOnce(tool.id)
-          }
-          const effective: Tool.Def = useShell ? shellWrap(tool) : tool
-          const description = useShell ? tool.shell!.description : output.description
+          // 通用 shell 解析器：对所有工具自动生效，无需手工 shell 字段
+          const genericParser = tool.shell ?? createShellParser(tool.parameters)
+          const useShell = style === "shell"
+          // shell 描述优先级：.shell.txt > 自动生成 > fallback
+          const shellDesc = SHELL_DESCRIPTIONS[tool.id] ?? genericParser.description
+          const description = useShell ? shellDesc : output.description
+          const effective: Tool.Def = useShell ? shellWrap(tool, genericParser) : tool
           return {
             id: tool.id,
             description: [

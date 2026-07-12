@@ -785,6 +785,7 @@ export const ActorTool = Tool.define(
           tools: next.toolAllowlist ? [...next.toolAllowlist] : "INHERIT",
           model,
           background,
+          parentAgentType: ctx.agent,
           task_id: effectiveTaskId,
           onReady: ({ actorID, sessionID }) =>
             ctx.metadata({

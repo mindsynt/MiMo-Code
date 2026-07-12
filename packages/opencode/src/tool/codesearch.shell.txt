@@ -1,0 +1,13 @@
+Code search tool: search for relevant API/Library/SDK context (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# search for code documentation:
+    codesearch <query> [--tokens-num <n>]
+
+Examples:
+    codesearch "React useState hook examples" --tokens-num 5000
+    codesearch "Python pandas dataframe filtering"
+    codesearch "Express.js middleware" --tokens-num 10000
+
+--tokens-num controls how much context to return. Range: 1000-50000.

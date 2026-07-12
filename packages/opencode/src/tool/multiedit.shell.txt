@@ -1,0 +1,17 @@
+Multi-edit tool: apply multiple text substitutions in one file (shell form).
+
+Script structure: same as other shell-mode tools.
+
+# apply edits to a file:
+    multiedit <file_path> --edits '<json_array>'
+
+The edits value is a JSON array, each element is:
+  {"old_string":"text to replace","new_string":"replacement text","replace_all":false}
+
+--edits value must be valid JSON, single-quoted to avoid shell escaping issues.
+
+Example:
+    multiedit /src/app.ts --edits '[
+      {"old_string":"function old()","new_string":"function new()"},
+      {"old_string":"const x = 1","new_string":"const x = 2","replace_all":true}
+    ]'

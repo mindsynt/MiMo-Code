@@ -1,0 +1,16 @@
+Search and browse session history (shell form). Two modes:
+
+Script structure: same as other shell-mode tools.
+
+# search history by text query:
+    history search <query> [--scope <s>] [--session-id <id>] [--kind <k>] [--tool-name <n>] [--time-after <ms>] [--limit <n>]
+
+# show context around a specific message:
+    history around <message_id> [--before <n>] [--after <n>]
+
+Examples:
+    history search "error message" --limit 20
+    history search "npm install" --kind tool_output
+    history around msg_abc123 --before 3 --after 5
+
+Kind values: user_text | assistant_text | tool_input | tool_error | reasoning | tool_output

@@ -1991,7 +1991,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         }
 
         if (input.noReply === true) return message
-        return yield* loop({ sessionID: input.sessionID, agentID: input.agentID ?? "main", task_id: input.task_id })
+        return yield* loop({
+          sessionID: input.sessionID,
+          agentID: input.agentID ?? "main",
+          task_id: input.task_id,
+          permissionOverride: input.permissionOverride,
+        })
       },
     )
 
@@ -2015,15 +2020,20 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       throw new Error("Impossible")
     })
 
-    const runLoop: (sessionID: SessionID, agentID?: string, task_id?: string) => Effect.Effect<MessageV2.WithParts> = Effect.fn(
+    const runLoop: (sessionID: SessionID, agentID?: string, task_id?: string, permissionOverride?: Permission.Ruleset) => Effect.Effect<MessageV2.WithParts> = Effect.fn(
       "SessionPrompt.run",
     )(
-      function* (sessionID: SessionID, agentID?: string, task_id?: string) {
+      function* (sessionID: SessionID, agentID?: string, task_id?: string, permissionOverride?: Permission.Ruleset) {
         const ctx = yield* InstanceState.context
         const slog = elog.with({ sessionID })
         let structured: unknown | undefined
         let step = 0
         const session = yield* sessions.get(sessionID)
+        // If a permission override is set (e.g. parent agent's hardPermission for subagents),
+        // merge it into the session's permission for the duration of this loop.
+        if (permissionOverride && permissionOverride.length > 0) {
+          session.permission = Permission.merge(session.permission ?? [], permissionOverride)
+        }
         let lastFinishedForPrune: MessageV2.Assistant | undefined
         let lastModelForPrune: Provider.Model | undefined
         let outputLengthContinuations = 0
@@ -3729,7 +3739,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         input.sessionID,
         agentID,
         lastAssistant(input.sessionID, agentID),
-        runLoop(input.sessionID, agentID, input.task_id),
+        runLoop(input.sessionID, agentID, input.task_id, input.permissionOverride),
       )
     })
 
@@ -3978,6 +3988,8 @@ export const PromptInput = z.object({
   source: z.enum(["user", "spawn", "hook"]).optional(),
   provenance: MessageV2.Provenance.optional(),
   noReply: z.boolean().optional(),
+  /** Permission override: additional rules merged on top of the session's permission for this prompt call only. Used by actor spawn to enforce parent agent's hardPermission on child subagents. Not persisted to database. */
+  permissionOverride: Permission.Ruleset.zod.optional(),
   tools: z
     .record(z.string(), z.boolean())
     .optional()
@@ -4036,6 +4048,7 @@ export const LoopInput = z.object({
   sessionID: SessionID.zod,
   agentID: z.string().optional(),
   task_id: z.string().optional(),
+  permissionOverride: Permission.Ruleset.zod.optional(),
 })
 
 export const ShellInput = z.object({

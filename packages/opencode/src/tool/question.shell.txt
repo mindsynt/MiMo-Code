@@ -1,0 +1,23 @@
+Ask the user one or more questions (shell form). Use to clarify intent.
+
+Script structure: same as other shell-mode tools.
+
+# ask questions (JSON format for multiple questions):
+    question '<questions_json>'
+
+Each question is: {"header":"Label","question":"What to ask?","options":[{"label":"Option 1","description":"Explanation"}, ...]}
+
+Example:
+    question '[
+      {"header":"Auth method","question":"Which auth method?","options":[
+        {"label":"OAuth","description":"OAuth 2.0 with Google/GitHub"},
+        {"label":"Email","description":"Email/password login"}
+      ]},
+      {"header":"Language","question":"Which language?","options":[
+        {"label":"TypeScript","description":"TS with strict mode"},
+        {"label":"Python","description":"Python 3.12+"}
+      ]}
+    ]'
+
+Use single quotes for the JSON to avoid shell escaping issues.
+Pass multiSelect:true to allow multiple selections.

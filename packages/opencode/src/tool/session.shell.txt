@@ -52,3 +52,8 @@ memory. Verbs: create | switch | list | cancel | ask.
 
 # Don't dump the child list in your reply — `session list` already renders it.
 # Just summarize which child you created or what changed.
+
+# WRONG — JSON fields directly, will fail:
+#   {"operation":"create","description":"..."}  ✗
+# RIGHT:
+#   session create implement the parser --mode build   ✓

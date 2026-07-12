@@ -83,9 +83,10 @@ describe("ToolRegistry.tools: invocation style resolution", () => {
           const read = tools.find((t) => t.id === "read")
           expect(read).toBeDefined()
           const schema = read!.parameters as any
-          // Original `read` parameters has file_path; shell wrap would expose `script`
-          expect(schema.shape?.file_path ?? schema._def?.shape?.file_path).toBeDefined()
-          expect(schema.shape?.script ?? schema._def?.shape?.script).toBeUndefined()
+          // `read` 工具现在使用通用解析器支持 shell 模式
+          // 因此暴露的是 shellInputSchema（仅 script）
+          expect(schema.shape?.script ?? schema._def?.shape?.script).toBeDefined()
+          expect(schema.shape?.file_path ?? schema._def?.shape?.file_path).toBeUndefined()
         }),
       { config: { tool: { invocation_style_by_tool: { read: "shell" } } } },
     ),
