@@ -4,6 +4,7 @@ import { useI18n } from "../context/i18n"
 import { createStore } from "solid-js/store"
 import { Collapsible } from "./collapsible"
 import type { IconProps } from "./icon"
+import { Icon } from "./icon"
 import { TextShimmer } from "./text-shimmer"
 
 export type TriggerTitle = {
@@ -33,6 +34,7 @@ export interface BasicToolProps {
   defer?: boolean
   locked?: boolean
   animated?: boolean
+  tool?: string
   onSubtitleClick?: () => void
   onTriggerClick?: JSX.EventHandlerUnion<HTMLElement, MouseEvent>
   triggerHref?: string
@@ -131,6 +133,11 @@ export function BasicTool(props: BasicToolProps) {
       data-hide-details={props.hideDetails ? "true" : undefined}
     >
       <div data-slot="basic-tool-tool-trigger-content">
+        <Show when={props.icon}>
+          <div data-slot="basic-tool-tool-indicator">
+            <Icon name={props.icon} size="small" classList={{ [`tool-color-${props.tool}`]: !!props.tool }} />
+          </div>
+        </Show>
         <div data-slot="basic-tool-tool-info">
           <Switch>
             <Match when={isTriggerTitle(props.trigger) && props.trigger}>
@@ -241,6 +248,25 @@ export function BasicTool(props: BasicToolProps) {
   )
 }
 
+const TOOL_LABELS: Record<string, { icon: IconProps["name"]; titleKey: string }> = {
+  read: { icon: "glasses", titleKey: "ui.tool.read" },
+  list: { icon: "bullet-list", titleKey: "ui.tool.list" },
+  glob: { icon: "magnifying-glass-menu", titleKey: "ui.tool.glob" },
+  grep: { icon: "magnifying-glass-menu", titleKey: "ui.tool.grep" },
+  webfetch: { icon: "window-cursor", titleKey: "ui.tool.webfetch" },
+  websearch: { icon: "window-cursor", titleKey: "ui.tool.websearch" },
+  codesearch: { icon: "code", titleKey: "ui.tool.codesearch" },
+  bash: { icon: "console", titleKey: "ui.tool.shell" },
+  edit: { icon: "code-lines", titleKey: "ui.messagePart.title.edit" },
+  write: { icon: "code-lines", titleKey: "ui.messagePart.title.write" },
+  apply_patch: { icon: "code-lines", titleKey: "ui.tool.patch" },
+  todowrite: { icon: "checklist", titleKey: "ui.tool.todos" },
+  todo: { icon: "checklist", titleKey: "ui.tool.todos" },
+  question: { icon: "bubble-5", titleKey: "ui.tool.questions" },
+  skill: { icon: "brain", titleKey: "ui.tool.skill" },
+  task: { icon: "task", titleKey: "ui.tool.agent.default" },
+}
+
 function label(input: Record<string, unknown> | undefined) {
   const keys = ["description", "query", "url", "filePath", "path", "pattern", "name"]
   return keys.map((key) => input?.[key]).find((value): value is string => typeof value === "string" && value.length > 0)
@@ -267,14 +293,20 @@ export function GenericTool(props: {
   input?: Record<string, unknown>
 }) {
   const i18n = useI18n()
+  const toolInfo = () => {
+    const info = TOOL_LABELS[props.tool]
+    if (info) return { icon: info.icon, title: i18n.t(info.titleKey), subtitle: label(props.input) }
+    return { icon: "mcp" as IconProps["name"], title: props.tool, subtitle: label(props.input) }
+  }
 
   return (
     <BasicTool
-      icon="mcp"
+      icon={toolInfo().icon}
+      tool={props.tool}
       status={props.status}
       trigger={{
-        title: i18n.t("ui.basicTool.called", { tool: props.tool }),
-        subtitle: label(props.input),
+        title: toolInfo().title,
+        subtitle: toolInfo().subtitle,
         args: args(props.input),
       }}
       hideDetails={props.hideDetails}

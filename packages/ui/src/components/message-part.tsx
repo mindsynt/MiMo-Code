@@ -670,22 +670,8 @@ export function AssistantParts(props: {
 
   return (
     <Show when={messageGroups().length > 0}>
-      <Accordion
-        multiple
-        value={expandedValues()}
-        onChange={(value) => {
-          const next = value as string[]
-          setExpandedMessages(produce((draft) => {
-            for (const key of next) draft[key] = true
-            for (const entry of messageGroups()) {
-              if (!next.includes(entry.message.id)) draft[entry.message.id] = false
-            }
-          }))
-        }}
-      >
-      <Index each={messageGroups()}>
-        {(entryAccessor) => {
-          const entry = entryAccessor()
+      <For each={messageGroups()}>
+        {(entry) => {
           const msg = entry.message
           const agentName = msg.agent ?? msg.agentID ?? "agent"
 
@@ -707,27 +693,17 @@ export function AssistantParts(props: {
           if (toolCount > 0) tags.push(`${toolCount} tools`)
 
           return (
-            <Accordion.Item value={msg.id}>
-              <StickyAccordionHeader>
-                <Accordion.Trigger>
-                  <div data-slot="agent-turn-trigger">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <Icon name="chevron-down" size="small" data-slot="accordion-chevron" />
-                      <span class="font-semibold text-text-strong truncate">{agentName}</span>
-                      <Show when={entry.summary.action}>
-                        <span class="text-text-weak truncate min-w-0 flex-1">{entry.summary.action}</span>
-                      </Show>
-                      <Show when={tags.length > 0}>
-                        <span class="shrink-0 text-12-medium text-text-dimmed bg-surface-weak px-1.5 py-0.5 rounded">
-                          {tags.join(" · ")}
-                        </span>
-                      </Show>
-                    </div>
-                  </div>
-                </Accordion.Trigger>
-              </StickyAccordionHeader>
-              <Accordion.Content>
-                <div data-component="agent-turn-content">
+            <div data-component="assistant-message" style={props.messages.length > 1 && entry.summary.action !== "Message" ? { "--agent-color": tone(agentName) } as JSX.CSSProperties : undefined}>
+              {/* 多 Agent 场景：agent 分隔线和标签 */}
+              <Show when={props.messages.length > 1 && entry.summary.action !== "Message"}>
+                <div data-component="agent-divider">
+                  <span data-component="agent-divider-label">{agentName}</span>
+                  <Show when={tags.length > 0}>
+                    <span data-component="agent-divider-tags">{tags.join(" · ")}</span>
+                  </Show>
+                </div>
+              </Show>
+              <div data-component="agent-turn-content">
                   <Index each={entry.groups}>
                   {(groupAccessor) => {
                     const groupType = createMemo(() => groupAccessor().type)
@@ -779,12 +755,10 @@ export function AssistantParts(props: {
                   }}
                 </Index>
                 </div>
-              </Accordion.Content>
-            </Accordion.Item>
+              </div>
           )
         }}
-      </Index>
-    </Accordion>
+      </For>
     </Show>
   )
 }
@@ -1591,20 +1565,25 @@ PART_MAPPING["subtask"] = function SubtaskPartDisplay(props) {
   const i18n = useI18n()
   const part = () => props.part as SubtaskPart
 
+  const label = () => {
+    if (part().command) return i18n.t("ui.tool.command", { command: part().command ?? "" })
+    if (part().agent) return i18n.t("ui.tool.agent", { type: part().agent ?? "" })
+    return i18n.t("ui.tool.skill")
+  }
+  const desc = () => part().description || part().prompt?.slice(0, 120)
+
   return (
-    <BasicTool
-      icon="mcp"
-      status="completed"
-      trigger={{
-        title: part().command
-          ? i18n.t("ui.tool.command", { command: part().command ?? "" })
-          : part().agent
-            ? i18n.t("ui.tool.agent", { type: part().agent ?? "" })
-            : i18n.t("ui.tool.skill"),
-        subtitle: part().description || part().prompt?.slice(0, 80),
-        args: part().prompt ? [part().prompt.slice(0, 120)] : [],
-      }}
-    />
+    <div data-component="subtask-part" class="flex items-start gap-2 px-4 py-1.5 text-13-regular text-text-base">
+      <span class="shrink-0 mt-0.5 text-icon-weak-base">
+        <Icon name="circle-check" size="small" />
+      </span>
+      <div class="min-w-0 flex-1">
+        <span class="text-text-strong font-medium">{label()}</span>
+        <Show when={desc()}>
+          <span class="text-text-weak ml-1">— {desc()}</span>
+        </Show>
+      </div>
+    </div>
   )
 }
 
@@ -1648,7 +1627,7 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
             "rounded-b-none": expanded(),
           }}
         >
-          <span>💭</span>
+          <Icon name="speech-bubble" size="small" class="shrink-0 text-text-weak" />
           <Show when={!expanded() || !hasMore()}>
             <span class="truncate flex-1">{previewText()}</span>
           </Show>

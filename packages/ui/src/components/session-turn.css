@@ -27,7 +27,6 @@
     align-self: stretch;
     min-width: 0;
     gap: 0px;
-    overflow-anchor: none;
   }
 
   [data-slot="session-turn-message-content"] {
