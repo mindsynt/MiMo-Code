@@ -25,6 +25,26 @@ import { Log } from "@/util"
 import { isRecord } from "@/util/record"
 import { createTextNgramMonitor, type TextNgramMonitor } from "./prompt/text-ngram-detection"
 
+/** Order-independent deep equal — 语义等价但 key 顺序不同的对象被视为相等。 */
+function normalizedEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  if (typeof a !== typeof b) return false
+  if (typeof a !== "object") return a === b
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a)) {
+    if (a.length !== (b as unknown[]).length) return false
+    return a.every((v, i) => normalizedEqual(v, (b as unknown[])[i]))
+  }
+  const aObj = a as Record<string, unknown>
+  const bObj = b as Record<string, unknown>
+  const aKeys = Object.keys(aObj).sort()
+  const bKeys = Object.keys(bObj).sort()
+  if (aKeys.length !== bKeys.length) return false
+  if (!aKeys.every((k, i) => k === bKeys[i])) return false
+  return aKeys.every((k) => normalizedEqual(aObj[k], bObj[k]))
+}
+
 const DOOM_LOOP_THRESHOLD = 3
 const log = Log.create({ service: "session.processor" })
 
@@ -202,7 +222,7 @@ export const layer: Layer.Layer<
         stepStartedAt: undefined,
         firstTokenAt: undefined,
         stepPartIds: [],
-        textNgramMonitor: undefined,
+        textNgramMonitor: createTextNgramMonitor(),
         textNgramRepeat: false,
       }
       let aborted = false
@@ -410,15 +430,49 @@ export const layer: Layer.Layer<
 
             const parts = MessageV2.parts(ctx.assistantMessage.id)
             const recentParts = parts.slice(-DOOM_LOOP_THRESHOLD)
+            const allToolParts = parts.filter((p): p is MessageV2.ToolPart => p.type === "tool")
 
+            // Check 1: 3 consecutive identical calls (normalized key-order).
             if (
-              recentParts.length !== DOOM_LOOP_THRESHOLD ||
-              !recentParts.every(
-                (part) =>
-                  part.type === "tool" &&
-                  part.tool === value.toolName &&
-                  part.state.status !== "pending" &&
-                  JSON.stringify(part.state.input) === JSON.stringify(value.input),
+              !(
+                recentParts.length === DOOM_LOOP_THRESHOLD &&
+                recentParts.every(
+                  (part) =>
+                    part.type === "tool" &&
+                    part.tool === value.toolName &&
+                    part.state.status !== "pending" &&
+                    normalizedEqual(part.state.input, value.input),
+                )
+              ) &&
+              // Check 2: Alternating pattern [A, B, A, B, A, B] or same-tool
+              // parameter oscillation (e.g. shell mode script alternation).
+              !(
+                allToolParts.length >= DOOM_LOOP_THRESHOLD * 2 &&
+                (() => {
+                  const lastN = allToolParts.slice(-(DOOM_LOOP_THRESHOLD * 2))
+                  const toolA = lastN[0].tool
+                  const toolB = lastN[1].tool
+                  if (toolA !== toolB) {
+                    // Different tools: strict [A, B, A, B, A, B] with matching params.
+                    return lastN.every((p, i) => {
+                      if (p.tool !== (i % 2 === 0 ? toolA : toolB)) return false
+                      const ref = lastN[i % 2 === 0 ? 0 : 1].state.input
+                      return normalizedEqual(p.state.input, ref)
+                    })
+                  }
+                  // Same tool: check if parameters oscillate between 2 distinct
+                  // states — catches shell-mode script alternation like
+                  // {script:"read A"} ↔ {script:"read --lines 50 A"}.
+                  const seenInputs: unknown[] = []
+                  for (const p of lastN) {
+                    if (!seenInputs.some((s) => normalizedEqual(s, p.state.input))) {
+                      if (seenInputs.length >= 2) return false
+                      seenInputs.push(p.state.input)
+                    }
+                  }
+                  if (seenInputs.length !== 2) return false
+                  return lastN.every((p, i) => normalizedEqual(p.state.input, seenInputs[i % 2]))
+                })()
               )
             ) {
               return
@@ -696,7 +750,6 @@ export const layer: Layer.Layer<
             ctx.stepPartIds = []
             ctx.toolcalls = {}
             ctx.textNgramRepeat = false
-            ctx.textNgramMonitor = createTextNgramMonitor()
             const stream = llm.stream(streamInput)
 
             yield* stream.pipe(

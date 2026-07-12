@@ -78,7 +78,7 @@ export function classifyAssistantStep(input: {
         part.type === "text" &&
         !part.synthetic &&
         !part.ignored &&
-        /<invoke name=|<parameter name=|<\/invoke>|<function_calls>/.test(part.text),
+        /<(invoke|tool_call)\s|<\/invoke>|<function_calls>|^Tool: |^\*\*Tool:\*\* /.test(part.text),
     )
   )
     return { type: "text-tool-call" }
