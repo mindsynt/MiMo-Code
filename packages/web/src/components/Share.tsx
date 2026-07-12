@@ -8,6 +8,8 @@ import styles from "./share.module.css"
 import type { MessageV2 } from "opencode/session/message-v2"
 import type { Message } from "opencode/session/message"
 import type { Session } from "opencode/session/index"
+import type { SessionID, MessageID, PartID } from "opencode/session/schema"
+import type { ProviderID, ModelID } from "opencode/provider/schema"
 import { Part, ProviderIcon } from "./share/part"
 
 type MessageWithParts = MessageV2.Info & { parts: MessageV2.Part[] }
@@ -62,7 +64,7 @@ export default function Share(props: {
     messages: Record<string, MessageWithParts>
   }>({
     info: {
-      id: props.id,
+      id: props.id as SessionID,
       slug: props.info.slug,
       projectID: props.info.projectID,
       directory: props.info.directory,
@@ -379,8 +381,8 @@ export default function Share(props: {
                                 <IconArrowDown width={14} height={14} />
                               </Show>
                               <span>{msg.agent ?? "assistant"}</span>
-                              <Show when={msg.modelID}>
-                                <span class={styles["agent-toggle-model"]}>{msg.modelID}</span>
+                              <Show when={(msg as MessageV2.Assistant).modelID}>
+                                <span class={styles["agent-toggle-model"]}>{(msg as MessageV2.Assistant).modelID}</span>
                               </Show>
                             </div>
                           </Show>
@@ -549,9 +551,9 @@ export function fromV1(v1: Message.Info): MessageWithParts {
       error: v1.metadata.error,
       parts: v1.parts.flatMap((part, index): MessageV2.Part[] => {
         const base = {
-          id: index.toString(),
-          messageID: v1.id,
-          sessionID: v1.metadata.sessionID,
+          id: index.toString() as unknown as PartID,
+          messageID: v1.id as unknown as MessageID,
+          sessionID: v1.metadata.sessionID as unknown as SessionID,
         }
         if (part.type === "text") {
           return [
@@ -614,7 +616,7 @@ export function fromV1(v1: Message.Info): MessageWithParts {
         }
         return []
       }),
-    }
+    } as unknown as MessageWithParts
   }
 
   if (v1.role === "user") {
@@ -632,9 +634,9 @@ export function fromV1(v1: Message.Info): MessageWithParts {
       },
       parts: v1.parts.flatMap((part, index): MessageV2.Part[] => {
         const base = {
-          id: index.toString(),
-          messageID: v1.id,
-          sessionID: v1.metadata.sessionID,
+          id: index.toString() as unknown as PartID,
+          messageID: v1.id as unknown as MessageID,
+          sessionID: v1.metadata.sessionID as unknown as SessionID,
         }
         if (part.type === "text") {
           return [
@@ -658,7 +660,7 @@ export function fromV1(v1: Message.Info): MessageWithParts {
         }
         return []
       }),
-    }
+    } as unknown as MessageWithParts
   }
 
   throw new Error("unknown message type")

@@ -72,6 +72,8 @@ export type MaxStepInput = {
    * or undefined to clear back to a plain busy state.
    */
   setStatus?: (message: string | undefined) => Effect.Effect<void>
+  /** 重试时降低 temperature 提高确定性 */
+  temperatureOverride?: number
 }
 
 /**
@@ -135,6 +137,7 @@ export const runCandidate = (
       messages: input.messages,
       tools: schemaOnly,
       agentID: input.agentID,
+      temperatureOverride: input.temperatureOverride,
     })
 
     yield* Stream.runForEach(stream, (event: LLM.Event) => {

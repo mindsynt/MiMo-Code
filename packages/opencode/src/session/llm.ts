@@ -194,6 +194,8 @@ export type StreamInput = {
   retries?: number
   toolChoice?: "auto" | "required" | "none"
   agentID?: string
+  /** 当检测到幻觉/空输出等异常后重试时，用较低的 temperature 提高确定性输出 */
+  temperatureOverride?: number
 }
 
 export type StreamRequest = StreamInput & {
@@ -385,7 +387,7 @@ const live: Layer.Layer<
         },
         {
           temperature: input.model.capabilities.temperature
-            ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+            ? (input.temperatureOverride ?? input.agent.temperature ?? ProviderTransform.temperature(input.model))
             : undefined,
           topP: input.agent.topP ?? ProviderTransform.topP(input.model),
           topK: ProviderTransform.topK(input.model),

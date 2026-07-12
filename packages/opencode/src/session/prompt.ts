@@ -2419,7 +2419,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             synthetic: true,
             text: [
               "<system-reminder>",
-              "Your previous response contained no usable answer (it had only reasoning, or was empty).",
+              "Your previous response contained no usable answer.",
+              input.reason === "think-only"
+                ? "It only contained reasoning/thinking without any concrete next step or final answer."
+                : "It was empty — it produced no text, no reasoning, and no tool calls.",
               "Provide a final answer to the user now, or call a valid tool to make progress on the task.",
               "Do not respond with only reasoning/thinking.",
               "</system-reminder>",
@@ -2536,14 +2539,25 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             sessionID: msg.sessionID,
             type: "text",
             synthetic: true,
-            text: [
-              "<system-reminder>",
-              "Your previous response did not produce valid structured output via the StructuredOutput tool",
-              "(it was plain text, empty, or only reasoning).",
-              "You MUST call the StructuredOutput tool now, passing JSON that matches the requested schema.",
-              "Do not reply with plain text and do not respond with only reasoning/thinking.",
-              "</system-reminder>",
-            ].join("\n"),
+            text: (() => {
+              // 在 autoRetryStructuredOutput 中 format 必定是 json_schema
+              const schemaHint =
+                input.lastUser.format?.type === "json_schema"
+                  ? JSON.stringify(input.lastUser.format.schema)
+                  : undefined
+              return [
+                "<system-reminder>",
+                "Your previous response did not produce structured output via the StructuredOutput tool.",
+                structuredRetries >= 2
+                  ? `This is attempt #${structuredRetries + 1}. All prior attempts also failed to use the StructuredOutput tool.`
+                  : schemaHint
+                    ? `The required schema is: ${schemaHint}`
+                    : "You MUST respond using the StructuredOutput tool.",
+                "You MUST call the StructuredOutput tool now with JSON matching that schema.",
+                "Do NOT reply with plain text, only reasoning, or any other format.",
+                "</system-reminder>",
+              ].join("\n")
+            })(),
           } satisfies MessageV2.TextPart)
           return true
         })
@@ -3258,6 +3272,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   model,
                   toolChoice: isLastStep ? "none" : format.type === "json_schema" ? "required" : undefined,
                   agentID: lastUser.agentID,
+                  // 与主路径相同的重试降温逻辑：计数器共享同一个 runLoop 作用域
+                  temperatureOverride:
+                    outputLengthContinuations > 0 ||
+                    invalidContinuations > 0 ||
+                    structuredRetries > 0 ||
+                    textToolCallRetries > 0 ||
+                    textLoopRecoveryAttempts > 0 ||
+                    textNgramRecoveryAttempts > 0
+                      ? 0.3
+                      : undefined,
                 })
                 .pipe(
                   Effect.onExit((exit) =>
@@ -3421,6 +3445,17 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               model,
               toolChoice: isLastStep ? ("none" as const) : format.type === "json_schema" ? ("required" as const) : undefined,
               agentID: lastUser.agentID,
+              // 在幻觉/空输出/结构错误重试时降低 temperature 提高确定性，
+              // 与 runLoop 顶部的六个计数器联动（均在当前用户消息范围内自动归零）。
+              temperatureOverride:
+                outputLengthContinuations > 0 ||
+                invalidContinuations > 0 ||
+                structuredRetries > 0 ||
+                textToolCallRetries > 0 ||
+                textLoopRecoveryAttempts > 0 ||
+                textNgramRecoveryAttempts > 0
+                  ? 0.3
+                  : undefined,
             }
 
             const queryParts =

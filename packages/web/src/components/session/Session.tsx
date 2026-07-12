@@ -7,6 +7,8 @@ import styles from "./session.module.css"
 import type { MessageV2 } from "@mimo-ai/cli/session/message-v2"
 import type { Message } from "@mimo-ai/cli/session/message"
 import type { Session } from "@mimo-ai/cli/session/index"
+import type { SessionID, MessageID, PartID } from "@mimo-ai/cli/session/schema"
+import type { ProviderID, ModelID } from "@mimo-ai/cli/provider/schema"
 import { Part, ProviderIcon } from "../share/part"
 
 type MessageWithParts = MessageV2.Info & { parts: MessageV2.Part[] }
@@ -34,7 +36,7 @@ export function SessionView(props: {
     messages: Record<string, MessageWithParts>
   }>({
     info: {
-      id: props.id,
+      id: props.id as SessionID,
       slug: props.info.slug,
       projectID: props.info.projectID,
       directory: props.info.directory,
@@ -194,7 +196,9 @@ export function SessionView(props: {
                                   <IconArrowDown width={14} height={14} />
                                 </Show>
                                 <span>{msg.agent ?? "assistant"}</span>
-                                <Show when={msg.modelID}><span class={styles["agent-toggle-model"]}>{msg.modelID}</span></Show>
+                                <Show when={(msg as MessageV2.Assistant).modelID}>
+                                  <span class={styles["agent-toggle-model"]}>{(msg as MessageV2.Assistant).modelID}</span>
+                                </Show>
                               </div>
                             </Show>
                             <Show when={exp() || msg.role !== "assistant"}>
@@ -248,13 +252,17 @@ export function SessionView(props: {
 function fromV1(v1: Message.Info): MessageWithParts {
   if (v1.role === "assistant") {
     return {
-      id: v1.id, sessionID: v1.metadata.sessionID, role: "assistant", parentID: "", agent: "build",
+      id: v1.id,
+      sessionID: v1.metadata.sessionID,
+      role: "assistant",
+      parentID: "",
+      agent: "build",
       time: { created: v1.metadata.time.created, completed: v1.metadata.time.completed },
       cost: v1.metadata.assistant!.cost, path: v1.metadata.assistant!.path, summary: v1.metadata.assistant!.summary,
       tokens: v1.metadata.assistant!.tokens ?? { input: 0, output: 0, cache: { read: 0, write: 0 }, reasoning: 0 },
       modelID: v1.metadata.assistant!.modelID, providerID: v1.metadata.assistant!.providerID, mode: "build", error: v1.metadata.error,
       parts: v1.parts.flatMap((part, i): MessageV2.Part[] => {
-        const b = { id: i.toString(), messageID: v1.id, sessionID: v1.metadata.sessionID }
+        const b = { id: i.toString() as unknown as PartID, messageID: v1.id as unknown as MessageID, sessionID: v1.metadata.sessionID as unknown as SessionID }
         if (part.type === "text") return [{ ...b, type: "text", text: part.text }]
         if (part.type === "step-start") return [{ ...b, type: "step-start" }]
         if (part.type === "tool-invocation") {
@@ -270,7 +278,7 @@ function fromV1(v1: Message.Info): MessageWithParts {
         }
         return []
       }),
-    }
+    } as unknown as MessageWithParts
   }
   if (v1.role === "user") {
     return {
@@ -278,12 +286,12 @@ function fromV1(v1: Message.Info): MessageWithParts {
       model: { providerID: "", modelID: "" },
       time: { created: v1.metadata.time.created },
       parts: v1.parts.flatMap((part, i): MessageV2.Part[] => {
-        const b = { id: i.toString(), messageID: v1.id, sessionID: v1.metadata.sessionID }
+        const b = { id: i.toString() as unknown as PartID, messageID: v1.id as unknown as MessageID, sessionID: v1.metadata.sessionID as unknown as SessionID }
         if (part.type === "text") return [{ ...b, type: "text", text: part.text }]
         if (part.type === "file") return [{ ...b, type: "file", mime: part.mediaType, filename: part.filename, url: part.url }]
         return []
       }),
-    }
+    } as unknown as MessageWithParts
   }
   throw new Error("unknown message type")
 }

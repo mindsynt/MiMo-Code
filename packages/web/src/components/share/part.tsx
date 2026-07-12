@@ -123,7 +123,7 @@ export function Part(props: PartProps) {
               <Match when={props.part.type === "tool" && props.part.tool === "skill"}>
                 <IconBrain width={16} height={16} />
               </Match>
-              <Match when={props.part.type === "tool" && props.part.tool === "websearch" || props.part.tool === "codesearch"}>
+              <Match when={props.part.type === "tool" && (props.part.tool === "websearch" || props.part.tool === "codesearch")}>
                 <IconGlobeAlt width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "actor"}>
