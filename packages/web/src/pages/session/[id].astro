@@ -1,0 +1,70 @@
+---
+import type { Session } from "opencode/session/index"
+import { InteractiveSession } from "../../components/session/InteractiveSession"
+import AppLayout from "../../layouts/AppLayout.astro"
+
+const apiUrl = import.meta.env.VITE_API_URL || ""
+const id = Astro.params.id || ""
+const res = await fetch(`${apiUrl}/share_data?id=${id}`)
+const data = (await res.json()) as {
+  info?: Session.Info
+  messages: Record<string, { role?: string; modelID?: string }>
+}
+
+if (!data.info) {
+  return new Response(null, { status: 404, statusText: "Session not found" })
+}
+
+const t = Astro.locals.t as ((key: string) => string) | undefined
+const messages = {
+  locale: "en",
+  link_to_message: "Link to message",
+  copied: "Copied!", copy: "Copy",
+  show_more: "Show more", show_less: "Show less",
+  show_results: "Show results", hide_results: "Hide results",
+  show_details: "Show details", hide_details: "Hide details",
+  show_preview: "Show preview", hide_preview: "Hide preview",
+  show_contents: "Show contents", hide_contents: "Hide contents",
+  show_output: "Show output", hide_output: "Hide output",
+  error: "Error",
+  waiting_for_messages: "Waiting for messages...",
+  status_connected_waiting: "Connected, waiting...",
+  status_connecting: "Connecting...",
+  status_disconnected: "Disconnected",
+  status_reconnecting: "Reconnecting...",
+  status_error: "Error",
+  status_unknown: "Unknown",
+  error_id_not_found: "Session ID not found",
+  error_api_url_not_found: "API URL not configured",
+  error_connection_failed: "Connection failed",
+  opencode_version: "Version", opencode_name: "MiMoCode",
+  models: "Models", cost: "Cost",
+  input_tokens: "Input", output_tokens: "Output",
+  reasoning_tokens: "Reasoning",
+  scroll_to_bottom: "Scroll to bottom",
+  attachment: "Attachment", thinking: "Thinking",
+  thinking_pending: "Thinking...",
+  creating_plan: "Creating plan...",
+  completing_plan: "Completing plan...",
+  updating_plan: "Updating plan...",
+  match_one: "match", match_other: "matches",
+  result_one: "result", result_other: "results",
+  debug_key: "Debug",
+}
+---
+
+<AppLayout>
+  <aside slot="sidebar" id="app-sidebar" style="width:var(--sidebar-width);flex-shrink:0;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:0.5rem;padding:0.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{data.info.title}</span>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:0.75rem;font-size:var(--text-xs);color:var(--text-dimmed);">
+      <p style="text-align:center;padding:2rem 0;">Interactive session</p>
+    </div>
+    <div style="flex-shrink:0;padding:0.5rem 1rem;border-top:1px solid var(--border);font-size:var(--text-xs);color:var(--text-dimmed);">
+      MiMoCode Web
+    </div>
+  </aside>
+  <meta slot="head" name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+  <InteractiveSession id={id} api={apiUrl} info={data.info} messages={messages} client:only="solid" />
+</AppLayout>

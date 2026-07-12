@@ -1,0 +1,75 @@
+---
+import "@fontsource/ibm-plex-mono/400.css"
+import "@fontsource/ibm-plex-mono/500.css"
+import "@fontsource/ibm-plex-mono/600.css"
+import "@fontsource/ibm-plex-mono/700.css"
+import "../styles/app.css"
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+    <link rel="icon" href="/favicon-v3.svg" type="image/svg+xml" />
+    <slot name="head" />
+  </head>
+  <body>
+    <div id="app-root">
+      <!-- 顶部导航栏 -->
+      <header id="app-header">
+        <div id="app-header-inner">
+          <a href="/docs/" id="app-logo" aria-label="MiMoCode Home">
+            <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="8" fill="var(--accent)"/>
+              <path d="M9 22V10l7 6-7 6z" fill="currentColor" opacity="0.6"/>
+              <path d="M16 22V10l7 6-7 6z" fill="currentColor"/>
+            </svg>
+            <span>MiMoCode</span>
+          </a>
+          <nav id="app-nav">
+            <slot name="nav" />
+          </nav>
+          <div id="app-header-spacer"></div>
+          <slot name="header-actions" />
+          <!-- 主题切换 -->
+          <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" type="button">
+            <svg class="theme-light-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            <svg class="theme-dark-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- 主体布局：侧栏 + 内容区 -->
+      <div id="app-body">
+        <slot name="sidebar" />
+        <main id="app-content">
+          <slot />
+        </main>
+      </div>
+
+      <!-- 底部状态栏 -->
+      <footer id="app-footer">
+        <slot name="footer" />
+      </footer>
+    </div>
+
+    <script is:inline>
+      function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute("data-theme");
+        const next = current === "dark" ? "light" : "dark";
+        html.setAttribute("data-theme", next);
+        try { localStorage.setItem("theme", next); } catch {}
+      }
+      (function initTheme() {
+        const html = document.documentElement;
+        try {
+          const saved = localStorage.getItem("theme");
+          if (saved) html.setAttribute("data-theme", saved);
+        } catch {}
+      })();
+    </script>
+  </body>
+</html>

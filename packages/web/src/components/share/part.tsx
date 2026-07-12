@@ -2,7 +2,6 @@ import map from "lang-map"
 import { DateTime } from "luxon"
 import { For, Show, Match, Switch, type JSX, createMemo, createSignal, type ParentProps } from "solid-js"
 import {
-  IconHashtag,
   IconSparkles,
   IconGlobeAlt,
   IconDocument,
@@ -10,7 +9,6 @@ import {
   IconQueueList,
   IconUserCircle,
   IconCommandLine,
-  IconCheckCircle,
   IconDocumentPlus,
   IconPencilSquare,
   IconRectangleStack,
@@ -51,6 +49,7 @@ export function Part(props: PartProps) {
       data-component="part"
       data-type={props.part.type}
       data-role={props.message.role}
+      data-agent={props.message.agent || props.message.role}
       data-copied={copied() ? true : undefined}
     >
       <div data-component="decoration">
@@ -72,55 +71,68 @@ export function Part(props: PartProps) {
           >
             <Switch>
               <Match when={props.message.role === "user" && props.part.type === "text"}>
-                <IconUserCircle width={18} height={18} />
+                <IconUserCircle width={16} height={16} />
               </Match>
               <Match when={props.message.role === "user" && props.part.type === "file"}>
-                <IconPaperClip width={18} height={18} />
+                <IconPaperClip width={16} height={16} />
               </Match>
               <Match
                 when={props.part.type === "step-start" && props.message.role === "assistant" && props.message.modelID}
               >
-                {(model) => <ProviderIcon model={model()} size={18} />}
+                {(model) => <ProviderIcon model={model()} size={16} />}
               </Match>
               <Match when={props.part.type === "reasoning" && props.message.role === "assistant"}>
-                <IconBrain width={18} height={18} />
+                <IconBrain width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "todowrite"}>
-                <IconQueueList width={18} height={18} />
+                <IconQueueList width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "bash"}>
-                <IconCommandLine width={18} height={18} />
+                <IconCommandLine width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "edit"}>
-                <IconPencilSquare width={18} height={18} />
+                <IconPencilSquare width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "write"}>
-                <IconDocumentPlus width={18} height={18} />
+                <IconDocumentPlus width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "read"}>
-                <IconDocument width={18} height={18} />
+                <IconDocument width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "grep"}>
-                <IconDocumentMagnifyingGlass width={18} height={18} />
+                <IconDocumentMagnifyingGlass width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "list"}>
-                <IconRectangleStack width={18} height={18} />
+                <IconRectangleStack width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "glob"}>
-                <IconMagnifyingGlass width={18} height={18} />
+                <IconMagnifyingGlass width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "webfetch"}>
-                <IconGlobeAlt width={18} height={18} />
+                <IconGlobeAlt width={16} height={16} />
               </Match>
               <Match when={props.part.type === "tool" && props.part.tool === "task"}>
-                <IconRobot width={18} height={18} />
+                <IconRobot width={16} height={16} />
+              </Match>
+              <Match when={props.part.type === "tool" && props.part.tool === "workflow"}>
+                <IconQueueList width={16} height={16} />
+              </Match>
+              <Match when={props.part.type === "tool" && props.part.tool === "apply_patch"}>
+                <IconPencilSquare width={16} height={16} />
+              </Match>
+              <Match when={props.part.type === "tool" && props.part.tool === "skill"}>
+                <IconBrain width={16} height={16} />
+              </Match>
+              <Match when={props.part.type === "tool" && props.part.tool === "websearch" || props.part.tool === "codesearch"}>
+                <IconGlobeAlt width={16} height={16} />
+              </Match>
+              <Match when={props.part.type === "tool" && props.part.tool === "actor"}>
+                <IconRobot width={16} height={16} />
               </Match>
               <Match when={true}>
-                <IconSparkles width={18} height={18} />
+                <IconSparkles width={16} height={16} />
               </Match>
             </Switch>
-            <IconHashtag width={18} height={18} />
-            <IconCheckCircle width={18} height={18} />
           </a>
           <span data-slot="tooltip">{messages.copied}</span>
         </div>
