@@ -72,7 +72,11 @@ const baseState = (input: Partial<State> = {}) =>
     sessionTotal: 0,
     session_status: {},
     session_diff: {},
+    session_goal: {},
+    session_cwd: {},
     todo: {},
+    task: {},
+    actor: {},
     permission: {},
     question: {},
     mcp: {},
@@ -81,6 +85,7 @@ const baseState = (input: Partial<State> = {}) =>
     limit: 10,
     message: {},
     part: {},
+    loadedInstructionFiles: [],
     ...input,
   }) as State
 

@@ -85,17 +85,113 @@ export function SessionTasksTab(props: { onCount?: (count: number) => void }) {
     return n
   })
 
+  const sessionID = createMemo(() => sync.data.session?.find(s => s.time.archived === undefined)?.id)
+  const activeGoal = createMemo(() => {
+    const id = sessionID()
+    if (!id) return undefined
+    const goal = sync.data.session_goal?.[id]
+    return goal?.condition
+  })
+
+  const allTasks = createMemo(() => {
+    const id = sessionID()
+    if (!id) return []
+    const tasks = sync.data.task?.[id]
+    if (!tasks || tasks.length === 0) return []
+    return tasks
+  })
+
+  const allActors = createMemo(() => {
+    const id = sessionID()
+    if (!id) return []
+    return sync.data.actor?.[id] ?? []
+  })
+
   createEffect(() => props.onCount?.(total()))
 
   return (
     <div class="h-full flex flex-col overflow-hidden" data-component="session-review">
       <ScrollView class="flex-1">
         <div class="px-3 pt-3 pb-12 flex flex-col gap-3">
+          {/* Goal 状态指示器 */}
+          <Show when={activeGoal()}>
+            {(goal) => (
+              <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-weak-base bg-surface-raised-base">
+                <Icon name="circle-check" size="small" class="text-icon-info-base shrink-0" />
+                <div class="flex flex-col min-w-0">
+                  <span class="text-12-medium text-text-strong truncate">{language.t("session.goal.title")}</span>
+                  <span class="text-12-regular text-text-weak truncate">{goal()}</span>
+                </div>
+              </div>
+            )}
+          </Show>
+
+          {/* Task 列表 */}
+          <Show when={allTasks().length > 0}>
+            <div class="flex flex-col rounded-lg border border-border-base overflow-hidden bg-background-base">
+              <div class="h-8 flex items-center gap-x-1.5 px-3 border-b border-border-base bg-surface-raised-base">
+                <Icon name="circle-check" size="small" class="text-icon-info-base size-4 shrink-0" />
+                <span class="text-12-medium text-text-strong uppercase tracking-wider">
+                  {language.t("session.tasks.title")}
+                </span>
+                <span class="text-12-medium text-text-base">({allTasks().length})</span>
+              </div>
+              <For each={allTasks()}>
+                {(task) => {
+                  const statusColor = () => {
+                    if (task.status === "done") return "text-icon-success-base"
+                    if (task.status === "in_progress") return "text-icon-info-base"
+                    if (task.status === "blocked") return "text-icon-warning-base"
+                    if (task.status === "abandoned") return "text-text-weak"
+                    return "text-text-weak"
+                  }
+                  return (
+                    <div class="group w-full min-w-0 min-h-8 flex items-center justify-start gap-x-2 px-3 py-1.5 hover:bg-surface-raised-base-hover transition-colors border-b border-border-weaker-base last:border-b-0 bg-background-base">
+                      <div class={`size-2 shrink-0 rounded-full ${statusColor()} bg-current`} />
+                      <div class="flex-1 min-w-0">
+                        <div class="text-13-medium whitespace-nowrap truncate text-text-strong">{task.summary}</div>
+                        <Show when={task.owner}>
+                          <div class="text-11-regular text-text-weak truncate">{task.owner}</div>
+                        </Show>
+                      </div>
+                    </div>
+                  )
+                }}
+              </For>
+            </div>
+          </Show>
+
+          {/* Sub-agent 列表 */}
+          <Show when={allActors().length > 0}>
+            <div class="flex flex-col rounded-lg border border-border-base overflow-hidden bg-background-base">
+              <div class="h-8 flex items-center gap-x-1.5 px-3 border-b border-border-base bg-surface-raised-base">
+                <Icon name="task" size="small" class="text-icon-info-base size-4 shrink-0" />
+                <span class="text-12-medium text-text-strong uppercase tracking-wider">Sub-agents</span>
+                <span class="text-12-medium text-text-base">({allActors().length})</span>
+              </div>
+              <For each={allActors()}>
+                {(actor) => (
+                  <div class="group w-full min-w-0 min-h-8 flex items-center justify-start gap-x-2 px-3 py-1.5 hover:bg-surface-raised-base-hover transition-colors border-b border-border-weaker-base last:border-b-0 bg-background-base">
+                    <div class={`size-2 shrink-0 rounded-full ${
+                      actor.status === "running" || actor.status === "completed" ? "bg-icon-success-base" :
+                      actor.status === "failed" || actor.status === "cancelled" ? "bg-icon-critical-base" :
+                      "bg-text-weaker"
+                    }`} />
+                    <div class="flex-1 min-w-0">
+                      <div class="text-13-medium whitespace-nowrap truncate text-text-strong">{actor.agent}: {actor.description}</div>
+                      <div class="text-11-regular text-text-weak truncate">{actor.status} · {actor.turn_count} turns</div>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+
           <Show
             when={total() > 0}
             fallback={
               <div class="text-12-regular text-text-weak px-1.5 py-1">
-                {language.t("session.tasks.empty" as Parameters<typeof language.t>[0])}
+                {language.t("session.tasks.empty")}
               </div>
             }
           >

@@ -11,7 +11,7 @@ import type {
   SnapshotFileDiff,
   Todo,
 } from "@mimo-ai/sdk/v2/client"
-import type { State, VcsCache } from "./types"
+import type { ActorEntry, GoalVerdict, SessionGoal, TaskItem, State, VcsCache } from "./types"
 import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"
 import { diffs as list, message as clean } from "@/utils/diffs"
@@ -57,8 +57,12 @@ function cleanupSessionCaches(
   setStore(
     produce((draft) => {
       dropSessionCaches(draft, [sessionID])
-      // 归档 session 需要清理 todo 数据（与裁剪不同，归档表示会话已结束）
+      // 归档 session 需要清理相关数据缓存
       delete draft.todo[sessionID]
+      delete draft.task[sessionID]
+      delete draft.session_goal[sessionID]
+      delete draft.session_cwd[sessionID]
+      delete draft.actor[sessionID]
     }),
   )
 }
@@ -174,9 +178,79 @@ export function applyDirectoryEvent(input: {
       input.setSessionTodo?.(props.sessionID, props.todos)
       break
     }
+    case "task.created": {
+      const props = event.properties as { sessionID: string; task: TaskItem }
+      const sessionID = props.sessionID
+      input.setStore("task", sessionID, (prev) => {
+        const items = prev ?? []
+        const idx = items.findIndex((t) => t.id === props.task.id)
+        if (idx >= 0) {
+          const next = [...items]
+          next[idx] = props.task
+          return next
+        }
+        return [...items, props.task]
+      })
+      break
+    }
+    case "task.updated": {
+      const props = event.properties as { sessionID: string; task: TaskItem }
+      const sessionID = props.sessionID
+      input.setStore("task", sessionID, (prev) => {
+        const items = prev ?? []
+        const idx = items.findIndex((t) => t.id === props.task.id)
+        if (idx >= 0) {
+          const next = [...items]
+          next[idx] = props.task
+          return next
+        }
+        return [...items, props.task]
+      })
+      break
+    }
     case "session.status": {
       const props = event.properties as { sessionID: string; status: SessionStatus }
       input.setStore("session_status", props.sessionID, reconcile(props.status))
+      break
+    }
+    case "session.goal": {
+      const props = event.properties as {
+        sessionID: string
+        goal?: { condition: string }
+        lastVerdict?: {
+          ok: boolean
+          impossible?: boolean
+          reason: string
+          attempt: number
+          messageID?: string
+          error?: boolean
+        }
+      }
+      const sessionID = props.sessionID
+      input.setStore("session_goal", sessionID, (prev) => {
+        const current: SessionGoal = {
+          condition: props.goal?.condition ?? prev?.condition,
+          verdicts: { ...prev?.verdicts },
+          lastMessageID: prev?.lastMessageID,
+        }
+        if (props.lastVerdict) {
+          const msgID = props.lastVerdict.messageID ?? prev?.lastMessageID
+          if (msgID) {
+            current.verdicts[msgID] = {
+              ok: props.lastVerdict.ok,
+              impossible: props.lastVerdict.impossible,
+              reason: props.lastVerdict.reason,
+              attempt: props.lastVerdict.attempt,
+              error: props.lastVerdict.error,
+            }
+            current.lastMessageID = msgID
+          }
+        }
+        if (!props.goal && !props.lastVerdict) {
+          return { condition: undefined, verdicts: {}, lastMessageID: undefined }
+        }
+        return current
+      })
       break
     }
     case "message.updated": {
@@ -361,6 +435,66 @@ export function applyDirectoryEvent(input: {
     case "tui.instructions.loaded": {
       const props = event.properties as { files: string[] }
       if (props?.files) input.setStore("loadedInstructionFiles", props.files)
+      break
+    }
+    case "actor.registered": {
+      const props = event.properties as {
+        sessionID: string
+        actorID: string
+        mode: "peer" | "subagent" | "main"
+        parentActorID?: string
+        description: string
+        agent: string
+        background: boolean
+      }
+      const sessionID = props.sessionID
+      input.setStore("actor", sessionID, (prev) => {
+        const items = prev ?? []
+        if (items.find((a) => a.actor_id === props.actorID)) return items
+        const entry: ActorEntry = {
+          actor_id: props.actorID,
+          session_id: sessionID,
+          mode: props.mode === "main" ? "main" : props.mode === "peer" ? "peer" : "subagent",
+          status: "pending",
+          agent: props.agent,
+          description: props.description,
+          parent_actor_id: props.parentActorID ?? null,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+          turn_count: 0,
+          last_turn_time: null,
+        }
+        return [...items, entry]
+      })
+      break
+    }
+    case "actor.status": {
+      const props = event.properties as {
+        sessionID: string
+        actorID: string
+        status: "pending" | "running" | "idle"
+        lastOutcome?: "success" | "failure" | "cancelled"
+        turnCount: number
+        lastTurnTime: number
+        error?: string
+      }
+      const sessionID = props.sessionID
+      input.setStore("actor", sessionID, (prev) => {
+        const items = prev ?? []
+        const idx = items.findIndex((a) => a.actor_id === props.actorID)
+        if (idx < 0) return items
+        const next = [...items]
+        next[idx] = {
+          ...next[idx],
+          status: props.lastOutcome
+            ? props.lastOutcome === "success" ? "completed" : props.lastOutcome === "cancelled" ? "cancelled" : "failed"
+            : props.status === "running" ? "running" : props.status === "idle" ? "running" : "pending",
+          turn_count: props.turnCount,
+          last_turn_time: props.lastTurnTime,
+          time_updated: Date.now(),
+        }
+        return next
+      })
       break
     }
   }

@@ -2370,11 +2370,11 @@ export default function Layout(props: ParentProps) {
   )
 
   return (
-    <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+    <div id="app-root" class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
       {autoselecting() ?? ""}
       <Titlebar />
-      <div class="flex-1 min-h-0 min-w-0 flex">
-        <div class="flex-1 min-h-0 relative">
+      <div id="app-body" class="flex-1 min-h-0 min-w-0 flex">
+        <div id="app-sidebar" class="flex-1 min-h-0 relative">
           <div class="size-full relative overflow-x-hidden">
             <nav
               aria-label={language.t("sidebar.nav.projectsAndSessions")}
@@ -2464,7 +2464,7 @@ export default function Layout(props: ParentProps) {
                 "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
               }}
             >
-              <main
+              <main id="app-content"
                 classList={{
                   "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
                 }}

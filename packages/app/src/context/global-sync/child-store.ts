@@ -179,7 +179,10 @@ export function createChildStoreManager(input: {
             sessionTotal: 0,
             session_status: {},
             session_diff: {},
+            session_goal: {},
+            session_cwd: {},
             todo: {},
+            task: {},
             permission: {},
             question: {},
             mcp_ready: false,
@@ -191,6 +194,7 @@ export function createChildStoreManager(input: {
             message: {},
             part: {},
             loadedInstructionFiles: [],
+            actor: {},
           })
           children[directory] = child
           disposers.set(directory, dispose)

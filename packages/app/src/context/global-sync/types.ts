@@ -30,6 +30,47 @@ export type ProjectMeta = {
   }
 }
 
+export type GoalVerdict = {
+  ok: boolean
+  impossible?: boolean
+  reason: string
+  attempt: number
+  error?: boolean
+}
+
+export type SessionGoal = {
+  condition?: string
+  verdicts: { [messageID: string]: GoalVerdict }
+  lastMessageID?: string
+}
+
+export type TaskItem = {
+  id: string
+  session_id: string
+  parent_task_id?: string
+  status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+  summary: string
+  owner?: string
+  created_at: number
+  last_event_at: number
+  ended_at?: number
+  cleanup_after?: number
+}
+
+export type ActorEntry = {
+  actor_id: string
+  session_id: string
+  mode: "subagent" | "peer" | "main"
+  status: "pending" | "running" | "completed" | "failed" | "cancelled" | "unknown"
+  agent: string
+  description: string
+  parent_actor_id: string | null
+  time_created: number
+  time_updated: number
+  turn_count: number
+  last_turn_time: number | null
+}
+
 export type State = {
   status: "loading" | "partial" | "complete"
   agent: Agent[]
@@ -49,8 +90,17 @@ export type State = {
   session_diff: {
     [sessionID: string]: SnapshotFileDiff[]
   }
+  session_goal: {
+    [sessionID: string]: SessionGoal
+  }
+  session_cwd: {
+    [sessionID: string]: string
+  }
   todo: {
     [sessionID: string]: Todo[]
+  }
+  task: {
+    [sessionID: string]: TaskItem[]
   }
   permission: {
     [sessionID: string]: PermissionRequest[]
@@ -73,6 +123,9 @@ export type State = {
     [messageID: string]: Part[]
   }
   loadedInstructionFiles: string[]
+  actor: {
+    [sessionID: string]: ActorEntry[]
+  }
 }
 
 export type VcsCache = {

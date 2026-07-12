@@ -705,7 +705,7 @@ export function MessageTimeline(props: {
             "--sticky-accordion-top": showHeader() ? "48px" : "0px",
           }}
         >
-          <div ref={props.setContentRef} class="min-w-0 w-full">
+          <div ref={props.setContentRef} class="min-w-0 w-full message-container">
             <Show when={showHeader()}>
               <div
                 ref={(el) => {

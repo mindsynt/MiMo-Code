@@ -42,6 +42,8 @@ export function SessionSidePanel(props: {
   focusReviewDiff: (path: string) => void
   reviewSnap: boolean
   size: Sizing
+  viewingAgent?: string
+  onViewAgent?: (actorID: string | undefined) => void
 }) {
   const layout = useLayout()
   const platform = usePlatform()

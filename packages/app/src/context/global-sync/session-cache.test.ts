@@ -34,7 +34,11 @@ describe("app session cache", () => {
     const store: {
       session_status: Record<string, SessionStatus | undefined>
       session_diff: Record<string, SnapshotFileDiff[] | undefined>
+      session_goal: Record<string, unknown | undefined>
+      session_cwd: Record<string, string | undefined>
       todo: Record<string, Todo[] | undefined>
+      task: Record<string, unknown[] | undefined>
+      actor: Record<string, unknown[] | undefined>
       message: Record<string, Message[] | undefined>
       part: Record<string, Part[] | undefined>
       permission: Record<string, PermissionRequest[] | undefined>
@@ -42,7 +46,11 @@ describe("app session cache", () => {
     } = {
       session_status: { ses_1: { type: "busy" } as SessionStatus },
       session_diff: { ses_1: [] },
+      session_goal: {},
+      session_cwd: {},
       todo: { ses_1: [] as Todo[] },
+      task: {},
+      actor: {},
       message: {},
       part: { msg_1: [part("prt_1", "ses_1", "msg_1")] },
       permission: { ses_1: [] as PermissionRequest[] },
@@ -66,7 +74,11 @@ describe("app session cache", () => {
     const store: {
       session_status: Record<string, SessionStatus | undefined>
       session_diff: Record<string, SnapshotFileDiff[] | undefined>
+      session_goal: Record<string, unknown | undefined>
+      session_cwd: Record<string, string | undefined>
       todo: Record<string, Todo[] | undefined>
+      task: Record<string, unknown[] | undefined>
+      actor: Record<string, unknown[] | undefined>
       message: Record<string, Message[] | undefined>
       part: Record<string, Part[] | undefined>
       permission: Record<string, PermissionRequest[] | undefined>
@@ -74,7 +86,11 @@ describe("app session cache", () => {
     } = {
       session_status: {},
       session_diff: {},
+      session_goal: {},
+      session_cwd: {},
       todo: {},
+      task: {},
+      actor: {},
       message: { ses_1: [m] },
       part: { [m.id]: [part("prt_1", "ses_1", m.id)] },
       permission: {},

@@ -13,7 +13,11 @@ export const SESSION_CACHE_LIMIT = 40
 type SessionCache = {
   session_status: Record<string, SessionStatus | undefined>
   session_diff: Record<string, SnapshotFileDiff[] | undefined>
+  session_goal: Record<string, unknown | undefined>
+  session_cwd: Record<string, string | undefined>
   todo: Record<string, Todo[] | undefined>
+  task: Record<string, unknown[] | undefined>
+  actor: Record<string, unknown[] | undefined>
   message: Record<string, Message[] | undefined>
   part: Record<string, Part[] | undefined>
   permission: Record<string, PermissionRequest[] | undefined>
@@ -36,8 +40,12 @@ export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<stri
     // 不应被自动删除。只有 session 被归档时才需要通过 cleanupSessionCaches 清理。
     delete store.session_diff[sessionID]
     delete store.session_status[sessionID]
+    delete store.session_goal[sessionID]
+    delete store.session_cwd[sessionID]
     delete store.permission[sessionID]
     delete store.question[sessionID]
+    delete store.task[sessionID]
+    delete store.actor[sessionID]
   }
 }
 

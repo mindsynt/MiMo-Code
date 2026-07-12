@@ -552,10 +552,13 @@ export const dict = {
   "session.docs.loadingFile": "loading...",
 
   "session.tasks.empty": "No tasks",
+  "session.tasks.title": "Tasks",
   "session.tasks.status.pending": "Pending",
   "session.tasks.status.in_progress": "In Progress",
   "session.tasks.status.completed": "Completed",
   "session.tasks.status.cancelled": "Cancelled",
+
+  "session.goal.title": "Stop Condition",
 
   "session.panel.reviewAndFiles": "Review and files",
   "session.review.filesChanged": "{{count}} Files Changed",
