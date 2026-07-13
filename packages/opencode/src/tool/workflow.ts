@@ -7,6 +7,7 @@ import { ConfigCompose } from "../config"
 import { InstanceState } from "@/effect"
 import { workflowRef } from "@/workflow/runtime-ref"
 import { BuiltinWorkflow } from "@/workflow/builtin"
+import { ActorRegistry } from "@/actor/registry"
 import type { SessionID } from "../session/schema"
 
 const id = "workflow"
@@ -38,7 +39,12 @@ const runSchema = z.strictObject({
     .describe(
       "(optional) Inline JS workflow script; must begin with `export const meta = {...}`. Provide EITHER name OR script, not both.",
     ),
-  args: z.any().optional().describe("(optional) JSON value exposed to the script as `args`."),
+  args: z
+    .any()
+    .optional()
+    .describe(
+      "(optional) Input value exposed to the script as the global `args`, verbatim. Pass objects/arrays as ACTUAL JSON values — NOT as a JSON string. e.g. args: { theme: \"...\", signals: { trademark: \"required\" } }, never args: \"{ \\\"theme\\\": ... }\".",
+    ),
   workspace: z
     .string()
     .optional()
@@ -102,10 +108,11 @@ function capTranscript(t: readonly TranscriptEntry[]): TranscriptEntry[] {
   ]
 }
 
-export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Service>(
+export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Service | ActorRegistry.Service>(
   id,
   Effect.gen(function* () {
     const config = yield* Config.Service
+    const actorRegistry = yield* ActorRegistry.Service
 
     // Resolve the WorkflowRuntime through the late-bound workflowRef rather than as
     // a Layer dependency: pulling WorkflowRuntime.Service in here would push that
@@ -173,6 +180,18 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
             ),
           )
         }
+        // Is a human attached to answer the workflow's up-front manifest
+        // permission ask? A workflow launched from an interactive session actor
+        // (foreground turn, no registered background actor) can prompt the human;
+        // one launched from a BACKGROUND subagent/system actor cannot, so the
+        // engine must ask non-interactively (fail closed) or it would hang forever
+        // on a reply no one can give. Mirrors decideAskRouting's `!askActor.background`:
+        // resolve the launching actor and treat a background actor as non-interactive.
+        // Absent actorID (the main foreground turn) => no background actor => interactive.
+        const askActor = ctx.actorID
+          ? yield* actorRegistry.get(ctx.sessionID as SessionID, ctx.actorID).pipe(Effect.orElseSucceed(() => undefined))
+          : undefined
+        const interactive = !askActor?.background
         const started = yield* runtime.start({
           script,
           sessionID: ctx.sessionID as SessionID,
@@ -181,6 +200,7 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
           workspace: input.workspace,
           maxConcurrentAgents: cfg.workflow?.maxConcurrentAgents,
           scriptDeadlineMs: cfg.workflow?.scriptDeadlineMs,
+          interactive,
           // Only the async (background) path relies on the inbox notification; the
           // sync path below returns the result inline, so suppress the duplicate.
           notifyOnTerminal: input.async === true,

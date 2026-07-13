@@ -1277,6 +1277,56 @@ function flattenDiscriminatedUnion(schema: JSONSchema.BaseSchema | JSONSchema7):
   } as JSONSchema7
 }
 
+// Models served by Moonshot AI (Kimi). Matched on both the provider id
+// (moonshotai, moonshotai-cn, kimi-for-coding, …) and the model id (kimi-*), so
+// Kimi models reached through a gateway/proxy still get the schema fixup below.
+function isMoonshot(model: Provider.Model): boolean {
+  const provider = model.providerID.toLowerCase()
+  const apiID = model.api.id.toLowerCase()
+  return (
+    provider.includes("moonshot") ||
+    provider.includes("kimi") ||
+    apiID.includes("moonshot") ||
+    apiID.includes("kimi")
+  )
+}
+
+// Moonshot's "flavored" JSON-schema validator rejects a tool-parameter node that
+// carries a `type` as a sibling of an `anyOf`: it wants the type inside each
+// `anyOf` item instead. Our discriminated-union tool parameters
+// (task/actor/cron/session `operation`, declared as
+// `z.discriminatedUnion(...).meta({ type: "object" })`) serialize to
+// `{ type: "object", anyOf: [...] }`, so Moonshot 400s with:
+//   "when using anyOf, type should be defined in anyOf items instead of the parent schema"
+// Push the parent `type` into any item that lacks its own, then drop the parent
+// `type` — the variants already declare `type: "object"`, so this removes only
+// the redundant, rejected parent keyword and preserves the schema's meaning.
+// `oneOf` is normalized the same way defensively (some SDKs, e.g.
+// `@ai-sdk/anthropic` used by kimi-for-coding, rewrite `oneOf` → `anyOf`).
+// Scoped to Moonshot/Kimi so the parent `type` other models rely on (e.g.
+// mimo-v2.5-pro / MiniMax-M3, which stringify the whole envelope without it —
+// see #1371) stays intact.
+function sanitizeMoonshot(node: any): any {
+  if (node === null || typeof node !== "object") return node
+  if (Array.isArray(node)) return node.map(sanitizeMoonshot)
+
+  const result: Record<string, any> = {}
+  for (const [key, value] of Object.entries(node)) result[key] = sanitizeMoonshot(value)
+
+  const combiner = (["anyOf", "oneOf"] as const).find((key) => Array.isArray(result[key]))
+  if (combiner && "type" in result) {
+    const parentType = result.type
+    result[combiner] = result[combiner].map((item: any) =>
+      item !== null && typeof item === "object" && !Array.isArray(item) && !("type" in item)
+        ? { type: parentType, ...item }
+        : item,
+    )
+    delete result.type
+  }
+
+  return result
+}
+
 export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
   /*
   if (["openai", "azure"].includes(providerID)) {
@@ -1381,6 +1431,12 @@ export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JS
     }
 
     schema = sanitizeGemini(schema)
+  }
+
+  // Moonshot/Kimi reject a sibling `type` next to an `anyOf` in tool schemas;
+  // normalize those nodes so our discriminated-union tools pass their validator.
+  if (isMoonshot(model)) {
+    schema = sanitizeMoonshot(schema)
   }
 
   return schema as JSONSchema7

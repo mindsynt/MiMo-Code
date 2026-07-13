@@ -3565,3 +3565,150 @@ describe("ProviderTransform.schema - openai discriminated-union flatten", () => 
     expect(result.anyOf).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.schema - moonshot combiner sibling type", () => {
+  // Real shape of the `operation` node emitted by task/actor/cron/session:
+  // z.discriminatedUnion(...).meta({ type: "object" }) serializes to
+  // { type: "object", anyOf: [...] } nested under a root strictObject (so
+  // flattenDiscriminatedUnion leaves it alone). oneOf is also covered — the
+  // transform handles it defensively.
+  const nested = (combiner: "oneOf" | "anyOf") =>
+    ({
+      type: "object",
+      properties: {
+        operation: {
+          type: "object",
+          [combiner]: [
+            {
+              type: "object",
+              properties: { action: { type: "string", const: "create" }, summary: { type: "string", minLength: 1 } },
+              required: ["action", "summary"],
+              additionalProperties: false,
+            },
+            {
+              type: "object",
+              properties: { action: { type: "string", const: "list" } },
+              required: ["action"],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+      required: ["operation"],
+      additionalProperties: false,
+    }) as any
+
+  const moonshot = { providerID: "moonshotai", api: { id: "kimi-k2.7-code", npm: "@ai-sdk/openai-compatible" } } as any
+
+  test("moonshotai — drops the parent type sitting next to oneOf", () => {
+    const result = ProviderTransform.schema(moonshot, nested("oneOf")) as any
+    expect(result.properties.operation.type).toBeUndefined()
+    expect(Array.isArray(result.properties.operation.oneOf)).toBe(true)
+    // Variants keep their own type, so the meaning is preserved.
+    expect(result.properties.operation.oneOf.every((v: any) => v.type === "object")).toBe(true)
+    // Root object is untouched.
+    expect(result.type).toBe("object")
+    expect(result.required).toEqual(["operation"])
+  })
+
+  test("moonshotai — drops the parent type sitting next to anyOf", () => {
+    const result = ProviderTransform.schema(moonshot, nested("anyOf")) as any
+    expect(result.properties.operation.type).toBeUndefined()
+    expect(Array.isArray(result.properties.operation.anyOf)).toBe(true)
+  })
+
+  test("detects Kimi via model id even when the provider id is not moonshot (e.g. a gateway)", () => {
+    const gateway = { providerID: "opencode", api: { id: "kimi-k2.7-code", npm: "@ai-sdk/openai-compatible" } } as any
+    const result = ProviderTransform.schema(gateway, nested("oneOf")) as any
+    expect(result.properties.operation.type).toBeUndefined()
+  })
+
+  test("pushes the parent type into a combiner item that lacks its own, keeping the item's own keys", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        operation: {
+          type: "object",
+          anyOf: [
+            { properties: { action: { const: "x" }, note: { type: "string" } }, required: ["action"] },
+            { type: "object", properties: { action: { const: "y" } }, additionalProperties: false },
+          ],
+        },
+      },
+    } as any
+    const result = ProviderTransform.schema(moonshot, schema) as any
+    expect(result.properties.operation.type).toBeUndefined()
+    // The typeless variant inherits the parent type WITHOUT losing its own keys.
+    expect(result.properties.operation.anyOf[0].type).toBe("object")
+    expect(result.properties.operation.anyOf[0].properties.action.const).toBe("x")
+    expect(result.properties.operation.anyOf[0].properties.note.type).toBe("string")
+    expect(result.properties.operation.anyOf[0].required).toEqual(["action"])
+    // The already-typed variant is preserved untouched.
+    expect(result.properties.operation.anyOf[1].type).toBe("object")
+    expect(result.properties.operation.anyOf[1].properties.action.const).toBe("y")
+    expect(result.properties.operation.anyOf[1].additionalProperties).toBe(false)
+  })
+
+  test("matches Moonshot via provider id 'kimi-for-coding' and via 'moonshot' in the model id", () => {
+    // exercises the isMoonshot branches provider.includes('kimi') and apiID.includes('moonshot')
+    const kfc = { providerID: "kimi-for-coding", api: { id: "k2", npm: "@ai-sdk/anthropic" } } as any
+    expect((ProviderTransform.schema(kfc, nested("anyOf")) as any).properties.operation.type).toBeUndefined()
+    const byModelId = { providerID: "custom", api: { id: "moonshot-v1-8k", npm: "@ai-sdk/openai-compatible" } } as any
+    expect((ProviderTransform.schema(byModelId, nested("anyOf")) as any).properties.operation.type).toBeUndefined()
+  })
+
+  test("normalizes a combiner+type nested deep inside array items and additionalProperties", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        list: { type: "array", items: { type: "object", anyOf: [{ type: "object", properties: { k: { const: "a" } } }] } },
+        bag: { type: "object", additionalProperties: { type: "object", oneOf: [{ type: "object", properties: { k: { const: "b" } } }] } },
+      },
+    } as any
+    const result = ProviderTransform.schema(moonshot, schema) as any
+    expect(result.properties.list.items.type).toBeUndefined()
+    expect(Array.isArray(result.properties.list.items.anyOf)).toBe(true)
+    expect(result.properties.bag.additionalProperties.type).toBeUndefined()
+    expect(Array.isArray(result.properties.bag.additionalProperties.oneOf)).toBe(true)
+    // The array/object containers keep their own type.
+    expect(result.properties.list.type).toBe("array")
+    expect(result.properties.bag.type).toBe("object")
+  })
+
+  test("leaves a combiner that has NO sibling type untouched", () => {
+    const schema = {
+      type: "object",
+      properties: { operation: { anyOf: [{ type: "object", properties: { a: { const: "x" } } }] } },
+    } as any
+    const result = ProviderTransform.schema(moonshot, schema) as any
+    expect("type" in result.properties.operation).toBe(false)
+    expect(result.properties.operation.anyOf[0].type).toBe("object")
+  })
+
+  test("non-moonshot models keep the parent type (guards the mimo/MiniMax stringify mitigation, #1371)", () => {
+    const mimo = { providerID: "mimo", api: { id: "mimo-v2.5-pro", npm: "@ai-sdk/openai-compatible" } } as any
+    const result = ProviderTransform.schema(mimo, nested("oneOf")) as any
+    expect(result.properties.operation.type).toBe("object")
+    expect(Array.isArray(result.properties.operation.oneOf)).toBe(true)
+  })
+
+  test("leaves allOf + type untouched (only anyOf/oneOf are rejected by Moonshot)", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        operation: { type: "object", allOf: [{ type: "object", properties: { a: { type: "string" } } }] },
+      },
+    } as any
+    const result = ProviderTransform.schema(moonshot, schema) as any
+    expect(result.properties.operation.type).toBe("object")
+    expect(Array.isArray(result.properties.operation.allOf)).toBe(true)
+  })
+
+  test("does not mutate the input schema", () => {
+    const input = nested("anyOf")
+    const snapshot = JSON.stringify(input)
+    ProviderTransform.schema(moonshot, input)
+    expect(JSON.stringify(input)).toBe(snapshot)
+    expect(input.properties.operation.type).toBe("object")
+  })
+})
