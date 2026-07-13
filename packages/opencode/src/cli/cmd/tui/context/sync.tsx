@@ -143,9 +143,7 @@ function actorStatusFromEvent(
   return "unknown"
 }
 
-export function bucketMessages<M extends { agentID?: string | null }>(
-  msgs: M[],
-): Record<string, M[]> {
+export function bucketMessages<M extends { agentID?: string | null }>(msgs: M[]): Record<string, M[]> {
   const out: Record<string, M[]> = {}
   for (const m of msgs) {
     const k = m.agentID ?? "main"
@@ -266,6 +264,37 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
     const fullSyncedSessions = new Set<string>()
     let syncedWorkspace = project.workspace.current()
+
+    // Delta buffer: batch streaming deltas to reduce Solid reactivity cost
+    const deltaBuffer = new Map<string, string>()
+    let deltaFlushTimer: ReturnType<typeof setTimeout> | null = null
+    function flushDeltas() {
+      const snapshot = new Map(deltaBuffer)
+      deltaBuffer.clear()
+      deltaFlushTimer = null
+      batch(() => {
+        for (const [key, delta] of snapshot) {
+          const [messageID, partID, field] = key.split("|")
+          const parts = store.part[messageID]
+          if (!parts) continue
+          const result = Binary.search(parts, partID, (p) => p.id)
+          if (!result.found) continue
+          setStore(
+            "part",
+            messageID,
+            produce((draft) => {
+              const part = draft[result.index]
+              const existing = part[field as keyof typeof part] as string | undefined
+              ;(part[field as keyof typeof part] as string) = (existing ?? "") + delta
+            }),
+          )
+        }
+      })
+    }
+    function scheduleFlush() {
+      if (deltaFlushTimer) return
+      deltaFlushTimer = setTimeout(flushDeltas, 100)
+    }
 
     event.subscribe((event) => {
       switch (event.type) {
@@ -554,6 +583,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           break
         }
         case "message.part.updated": {
+          // Flush any pending deltas before a full part update to avoid stale writes
+          if (deltaBuffer.size > 0) flushDeltas()
           const parts = store.part[event.properties.part.messageID]
           if (!parts) {
             setStore("part", event.properties.part.messageID, [event.properties.part])
@@ -575,20 +606,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "message.part.delta": {
-          const parts = store.part[event.properties.messageID]
-          if (!parts) break
-          const result = Binary.search(parts, event.properties.partID, (p) => p.id)
-          if (!result.found) break
-          setStore(
-            "part",
-            event.properties.messageID,
-            produce((draft) => {
-              const part = draft[result.index]
-              const field = event.properties.field as keyof typeof part
-              const existing = part[field] as string | undefined
-              ;(part[field] as string) = (existing ?? "") + event.properties.delta
-            }),
-          )
+          const key = `${event.properties.messageID}|${event.properties.partID}|${event.properties.field}`
+          deltaBuffer.set(key, (deltaBuffer.get(key) ?? "") + event.properties.delta)
+          scheduleFlush()
           break
         }
 
@@ -639,7 +659,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             turn_count: 0,
             last_turn_time: null,
           }
-          setStore("actor", sid, [...list, entry].toSorted((a, b) => a.time_created - b.time_created))
+          setStore(
+            "actor",
+            sid,
+            [...list, entry].toSorted((a, b) => a.time_created - b.time_created),
+          )
           break
         }
 
@@ -649,10 +673,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const idx = list.findIndex((a) => a.actor_id === event.properties.actorID)
           if (idx === -1) break
           setStore("actor", sid, idx, {
-            status: actorStatusFromEvent(
-              event.properties.status,
-              event.properties.lastOutcome,
-            ),
+            status: actorStatusFromEvent(event.properties.status, event.properties.lastOutcome),
             turn_count: event.properties.turnCount,
             last_turn_time: event.properties.lastTurnTime,
             time_updated: Date.now(),
