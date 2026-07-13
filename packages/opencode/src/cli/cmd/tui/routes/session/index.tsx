@@ -1164,7 +1164,15 @@ export function Session() {
   })
 
   // snap to bottom when session changes
-  createEffect(on(() => route.sessionID, () => { scrollByAgent.clear(); toBottom() }))
+  createEffect(
+    on(
+      () => route.sessionID,
+      () => {
+        scrollByAgent.clear()
+        toBottom()
+      },
+    ),
+  )
 
   // save/restore scroll position when switching between agent views
   createEffect(
@@ -2413,9 +2421,13 @@ function WorkflowPage(props: {
           pageScroll.scrollTop = 0
         }
         const interval = setInterval(() => {
+          // Only poll while the workflow is actively running; idle/completed
+          // workflows don't need structure/transcript refreshes.
+          const status = sync.data.workflow[runID]?.status
+          if (status !== "running") return
           sync.loadWorkflowStructure(runID)
           sync.loadWorkflowTranscript(runID)
-        }, 1000)
+        }, 3000)
         onCleanup(() => {
           clearInterval(interval)
           if (pageScroll) workflowScrollByRun.set(runID, pageScroll.scrollTop)

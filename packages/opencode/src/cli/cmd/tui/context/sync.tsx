@@ -265,13 +265,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const fullSyncedSessions = new Set<string>()
     let syncedWorkspace = project.workspace.current()
 
-    // Delta buffer: batch streaming deltas to reduce Solid reactivity cost
+    // Delta buffer: batch streaming deltas to reduce Solid reactivity cost.
+    // Uses requestAnimationFrame instead of setTimeout to align with the TUI
+    // render cycle, reducing unnecessary Yoga layout passes from bursty tokens.
     const deltaBuffer = new Map<string, string>()
-    let deltaFlushTimer: ReturnType<typeof setTimeout> | null = null
+    let deltaFlushRaf: number | null = null
     function flushDeltas() {
       const snapshot = new Map(deltaBuffer)
       deltaBuffer.clear()
-      deltaFlushTimer = null
+      deltaFlushRaf = null
       batch(() => {
         for (const [key, delta] of snapshot) {
           const [messageID, partID, field] = key.split("|")
@@ -292,8 +294,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       })
     }
     function scheduleFlush() {
-      if (deltaFlushTimer) return
-      deltaFlushTimer = setTimeout(flushDeltas, 100)
+      if (deltaFlushRaf !== null) return
+      deltaFlushRaf = requestAnimationFrame(flushDeltas)
     }
 
     event.subscribe((event) => {
