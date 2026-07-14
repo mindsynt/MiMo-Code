@@ -14,10 +14,10 @@ import { Plugin } from "../../src/plugin"
 import { Provider as ProviderSvc } from "../../src/provider"
 import { Env } from "../../src/env"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { SessionID } from "../../src/session/schema"
 import { Question } from "../../src/question"
 import { Todo } from "../../src/session/todo"
 import { Session } from "../../src/session"
-import { MessageV2 } from "../../src/session/message-v2"
 import { LLM } from "../../src/session/llm"
 import { AppFileSystem } from "@mimo-ai/shared/filesystem"
 import { SessionPrune } from "../../src/session/prune"
@@ -77,6 +77,8 @@ const mcp = Layer.succeed(
     status: () => Effect.succeed({}),
     clients: () => Effect.succeed({}),
     tools: () => Effect.succeed({}),
+    sessionTools: () => Effect.succeed({}),
+    discoverTools: () => Effect.succeed([]),
     prompts: () => Effect.succeed({}),
     resources: () => Effect.succeed({}),
     add: () => Effect.succeed({ status: { status: "disabled" as const } }),
@@ -84,14 +86,12 @@ const mcp = Layer.succeed(
     disconnect: () => Effect.void,
     getPrompt: () => Effect.succeed(undefined),
     readResource: () => Effect.succeed(undefined),
-    startAuth: () => Effect.die("unexpected MCP auth in spawn-notification tests"),
-    authenticate: () => Effect.die("unexpected MCP auth in spawn-notification tests"),
-    finishAuth: () => Effect.die("unexpected MCP auth in spawn-notification tests"),
+    startAuth: () => Effect.die("unexpected MCP auth in cancel-notification tests"),
+    authenticate: () => Effect.die("unexpected MCP auth in cancel-notification tests"),
+    finishAuth: () => Effect.die("unexpected MCP auth in cancel-notification tests"),
     removeAuth: () => Effect.void,
     supportsOAuth: () => Effect.succeed(false),
     hasStoredTokens: () => Effect.succeed(false),
-    sessionTools: () => Effect.succeed({}),
-    discoverTools: () => Effect.succeed([]),
     getAuthStatus: () => Effect.succeed("not_authenticated" as const),
   }),
 )
@@ -192,7 +192,7 @@ function makeLayer() {
       Layer.provide(Worktree.defaultLayer),
       Layer.provideMerge(taskRegistry),
       Layer.provide(TaskRegistry.defaultLayer),
-    Layer.provide(SchedulerDefaultLayer),
+      Layer.provide(SchedulerDefaultLayer),
       Layer.provideMerge(inboxLayer),
     ),
   ).pipe(Layer.provide(summary))
@@ -250,82 +250,84 @@ function providerCfg(url: string) {
   }
 }
 
-describe("Actor.spawn inbox notifications (Plan 3 / Task 2)", () => {
-  it.live("background subagent completion writes actor_notification to parent main inbox", () =>
+const parentInboxRows = (parentID: SessionID) =>
+  Effect.sync(() =>
+    Database.use((db) =>
+      db
+        .select()
+        .from(InboxTable)
+        .where(and(eq(InboxTable.receiver_session_id, parentID), eq(InboxTable.receiver_actor_id, "main")))
+        .all(),
+    ),
+  )
+
+describe("Actor cancel notification (T41 unified terminal-status bridge)", () => {
+  // Regression guard: successful completion still notifies exactly once (no
+  // double-notify introduced by the bridge). Read immediately after the outcome
+  // resolves — forkWork sends the notification BEFORE resolving the Deferred, so
+  // the row is present without an added sleep (a post-terminal sleep lets the
+  // ephemeral actor's Instance tear down and the row disappears).
+  it.live("successful background subagent still notifies parent exactly once (completed)", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {
         const actor = yield* Actor.Service
         const session = yield* Session.Service
 
         const parent = yield* session.create({
-          title: "notification-test-bg-subagent",
+          title: "cancel-notify-success",
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         })
 
-        // Let the LLM respond immediately so forkWork.onSuccess fires.
         yield* llm.text("**Status**: success\n**Summary**: done")
 
         const result = yield* actor.spawn({
           mode: "subagent",
           sessionID: parent.id,
           agentType: "build",
-          task: "write a hello world file",
-          description: "background build task",
+          task: "quick task",
+          description: "successful task",
           context: "none",
           tools: ["read"],
           background: true,
           model: ref,
         })
 
-        // Wait for the forked fiber to complete.
         yield* Deferred.await(result.outcome)
 
-        // Query inbox table directly: expect 1 row delivered to main actor.
-        const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(
-                and(
-                  eq(InboxTable.receiver_session_id, parent.id),
-                  eq(InboxTable.receiver_actor_id, "main"),
-                ),
-              )
-              .all(),
-          ),
-        )
-
+        const rows = yield* parentInboxRows(parent.id)
         expect(rows.length).toBe(1)
-        expect(rows[0].type).toBe("actor_notification")
         const content = rows[0].content as { text?: string }
-        expect(content.text).toContain("<actor-notification>")
-        expect(content.text).toContain("background build task")
         expect(content.text).toContain("completed")
       }),
       { git: true, config: providerCfg },
     ),
   )
 
-  it.live("checkpoint-writer agentType does not write inbox notification", () =>
+  // Regression guard: a background subagent whose turn reports a failure status
+  // still notifies the parent EXACTLY once (no double-notify introduced by the
+  // unified terminal path). An LLM-level error is absorbed by the prompt (the
+  // turn still completes), so the faithful, deterministic "non-success" signal
+  // the actor surfaces is a reported `Status: failed` on an otherwise completed
+  // turn — assert that carries through as a single actor_notification.
+  it.live("background subagent reporting failure still notifies parent exactly once", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {
         const actor = yield* Actor.Service
         const session = yield* Session.Service
 
         const parent = yield* session.create({
-          title: "notification-test-ckpt-writer",
+          title: "cancel-notify-fail",
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         })
 
-        // Auto-respond so the actor completes without hanging.
-        yield* llm.text("checkpoint output")
+        yield* llm.text("**Status**: failed\n**Summary**: could not complete")
 
         const result = yield* actor.spawn({
           mode: "subagent",
           sessionID: parent.id,
-          agentType: "checkpoint-writer",
-          task: "write checkpoint",
+          agentType: "build",
+          task: "will report failure",
+          description: "failing task",
           context: "none",
           tools: ["read"],
           background: true,
@@ -334,242 +336,67 @@ describe("Actor.spawn inbox notifications (Plan 3 / Task 2)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        // Inbox table must be empty — checkpoint-writer is gated out.
-        const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(eq(InboxTable.receiver_session_id, parent.id))
-              .all(),
-          ),
-        )
-
-        expect(rows.length).toBe(0)
+        const rows = yield* parentInboxRows(parent.id)
+        expect(rows.length).toBe(1)
+        expect(rows[0].type).toBe("actor_notification")
+        const content = rows[0].content as { text?: string }
+        expect(content.text).toContain("failed")
       }),
       { git: true, config: providerCfg },
     ),
   )
 
-  it.live("foreground spawn does not write inbox notification", () =>
+  // Core T41 assertion: cancelling a running background peer produces EXACTLY
+  // ONE actor_notification{cancelled} to its parent's main inbox. Runs last
+  // because it hangs the shared TestLLMServer request until forced-cancel
+  // aborts it.
+  it.live("cancelling a running background peer notifies parent exactly once (cancelled)", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {
         const actor = yield* Actor.Service
         const session = yield* Session.Service
 
         const parent = yield* session.create({
-          title: "notification-test-fg",
+          title: "cancel-notify-peer",
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         })
 
-        // Auto-respond so the foreground spawn completes.
-        yield* llm.text("**Status**: success\n**Summary**: done")
-
-        // background: false — foreground spawn, caller awaits via Fiber.join.
-        const result = yield* actor.spawn({
-          mode: "subagent",
-          sessionID: parent.id,
-          agentType: "build",
-          task: "check something",
-          description: "foreground build task",
-          context: "none",
-          tools: ["read"],
-          background: false,
-          model: ref,
-        })
-
-        // Foreground spawn: Fiber.join already awaited inside spawnSubagent.
-        // outcome Deferred is also resolved; await it for safety.
-        yield* Deferred.await(result.outcome)
-
-        // No inbox row should exist — foreground path skips inbox.send.
-        const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(eq(InboxTable.receiver_session_id, parent.id))
-              .all(),
-          ),
-        )
-
-        expect(rows.length).toBe(0)
-      }),
-      { git: true, config: providerCfg },
-    ),
-  )
-
-  // T12: a persistent background PEER that finishes a *woken* (inbox-driven)
-  // turn must notify its parent exactly once — forkWork.notify only covers the
-  // spawn turn, so later woken turns would otherwise go idle silently.
-  it.live("background peer finishing a woken turn sends exactly one actor_notification to parent", () =>
-    provideTmpdirServer(
-      Effect.fnUntraced(function* ({ llm }) {
-        const actor = yield* Actor.Service
-        const session = yield* Session.Service
-        const inbox = yield* Inbox.Service
-
-        const parent = yield* session.create({
-          title: "notification-test-woken-peer",
-          permission: [{ permission: "*", pattern: "*", action: "allow" }],
-        })
-
-        // One response for the spawn turn, one for the woken turn.
-        yield* llm.text("**Status**: success\n**Summary**: spawn turn")
-        yield* llm.text("**Status**: success\n**Summary**: woken turn")
+        // Make the spawn turn hang so the actor stays running until we cancel.
+        yield* llm.hang
 
         const result = yield* actor.spawn({
           mode: "peer",
           sessionID: parent.id,
           agentType: "build",
-          task: "peer that will be woken",
-          description: "woken peer task",
+          task: "long running peer",
+          description: "cancellable peer task",
           context: "none",
           tools: ["read"],
           background: true,
           model: ref,
         })
 
-        // Spawn turn completes → forkWork.notify writes the FIRST notification.
-        yield* Deferred.await(result.outcome)
-
-        const inboxRows = (agentID: string) =>
-          Effect.sync(() =>
-            Database.use((db) =>
-              db
-                .select()
-                .from(InboxTable)
-                .where(
-                  and(
-                    eq(InboxTable.receiver_session_id, parent.id),
-                    eq(InboxTable.receiver_actor_id, agentID),
-                  ),
-                )
-                .all(),
-            ),
-          )
-
-        // Clear the spawn-turn notification so we can assert the woken turn adds
-        // exactly one more.
-        yield* Effect.sync(() =>
-          Database.use((db) => db.delete(InboxTable).where(eq(InboxTable.receiver_session_id, parent.id)).run()),
-        )
-
-        // Wake the peer with an inbox message. This drives a woken turn via
-        // SessionPrompt.loop({ notifyParentOnComplete: true }).
-        yield* inbox
-          .send({
-            receiverSessionID: result.sessionID,
-            receiverActorID: result.actorID,
-            senderSessionID: parent.id,
-            senderActorID: "main",
-            content: "please do more work",
-          })
-          .pipe(Effect.orDie)
-
-        // Poll for the woken-turn notification. Delivery can land in TWO places:
-        // the raw InboxTable row, OR — because inbox.send also fork-wakes the
-        // parent main runner — a drained synthetic user message in the parent
-        // main slice (the woken parent consumes the row into a message). Checking
-        // only the raw row races the parent's drain and is flaky; assert on
-        // either surface. Either way the actor_notification WAS delivered.
-        const found = yield* Effect.gen(function* () {
-          for (let i = 0; i < 200; i++) {
-            const r = yield* inboxRows("main")
-            if (r.length > 0) {
-              const content = r[0].content as { text?: string }
-              return { type: r[0].type, text: content.text ?? "" }
-            }
-            const msgs = yield* Session.Service.use((s) => s.messages({ sessionID: parent.id, agentID: "main" })).pipe(
-              Effect.catch(() => Effect.succeed([] as MessageV2.WithParts[])),
-            )
-            for (const m of msgs) {
-              for (const p of m.parts) {
-                if (p.type === "text" && p.synthetic && p.text.includes("<actor-notification>")) {
-                  return { type: "actor_notification", text: p.text }
-                }
-              }
-            }
+        // Wait until the actor is actually running (LLM request in flight).
+        yield* Effect.gen(function* () {
+          for (let i = 0; i < 400; i++) {
+            const calls = yield* llm.calls
+            if (calls > 0) return
             yield* Effect.sleep("25 millis")
           }
-          return undefined
         })
 
-        expect(found).toBeDefined()
-        expect(found!.type).toBe("actor_notification")
-        expect(found!.text).toContain("<actor-notification>")
-        expect(found!.text).toContain("woken peer task")
-        expect(found!.text).toContain("completed")
+        yield* actor.cancel(result.sessionID, result.actorID, "forced")
 
-        yield* actor.cancel(result.sessionID, result.actorID, "forced").pipe(Effect.ignore)
-      }),
-      { git: true, config: providerCfg },
-    ),
-  )
-
-  // T12 gate: a SYSTEM subagent agentType (checkpoint-writer) spawned as a peer
-  // must NOT notify on a woken turn — SYSTEM_SPAWNED_AGENT_TYPES are excluded.
-  it.live("system-spawned peer finishing a woken turn sends no notification", () =>
-    provideTmpdirServer(
-      Effect.fnUntraced(function* ({ llm }) {
-        const actor = yield* Actor.Service
-        const session = yield* Session.Service
-        const inbox = yield* Inbox.Service
-
-        const parent = yield* session.create({
-          title: "notification-test-woken-system-peer",
-          permission: [{ permission: "*", pattern: "*", action: "allow" }],
-        })
-
-        yield* llm.text("spawn turn output")
-        yield* llm.text("woken turn output")
-
-        const result = yield* actor.spawn({
-          mode: "peer",
-          sessionID: parent.id,
-          agentType: "checkpoint-writer",
-          task: "system peer that will be woken",
-          description: "woken system peer task",
-          context: "none",
-          tools: ["read"],
-          background: true,
-          model: ref,
-        })
-
+        // The cancelled outcome resolves after the terminal bridge/notify path.
         yield* Deferred.await(result.outcome)
 
-        // checkpoint-writer is gated in forkWork.notify too, so the inbox should
-        // already be empty; clear defensively then wake.
-        yield* Effect.sync(() =>
-          Database.use((db) => db.delete(InboxTable).where(eq(InboxTable.receiver_session_id, parent.id)).run()),
-        )
-
-        yield* inbox
-          .send({
-            receiverSessionID: result.sessionID,
-            receiverActorID: result.actorID,
-            senderSessionID: parent.id,
-            senderActorID: "main",
-            content: "please do more work",
-          })
-          .pipe(Effect.orDie)
-
-        // Give the woken turn ample time to run and (not) notify.
-        yield* Effect.sleep("500 millis")
-
-        const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(eq(InboxTable.receiver_session_id, parent.id))
-              .all(),
-          ),
-        )
-
-        expect(rows.length).toBe(0)
-
-        yield* actor.cancel(result.sessionID, result.actorID, "forced").pipe(Effect.ignore)
+        const rows = yield* parentInboxRows(parent.id)
+        expect(rows.length).toBe(1)
+        expect(rows[0].type).toBe("actor_notification")
+        const content = rows[0].content as { text?: string }
+        expect(content.text).toContain("<actor-notification>")
+        expect(content.text).toContain("cancellable peer task")
+        expect(content.text).toContain("cancelled")
       }),
       { git: true, config: providerCfg },
     ),
