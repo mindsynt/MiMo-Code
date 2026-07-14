@@ -679,8 +679,9 @@ ${entries}
         (p) => p.type === "text" && p.text.startsWith('<skill_content name="'),
       )
       if (!alreadyWrapped) {
-        const availableSkills = yield* sys.available(input.agent)
-        if (availableSkills.length > 0) {
+        // Use all() to include hidden skills (primarily compose:*) — respect the user's explicit /mention action
+        const allSkills = yield* sys.all()
+        if (allSkills.length > 0) {
           const bodyText = userMessage.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n")
           const stripped = bodyText.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ")
           const mentioned: string[] = []
@@ -689,7 +690,7 @@ ${entries}
           for (const m of stripped.matchAll(mentionRe)) {
             const name = m[1]
             if (!name || seen.has(name)) continue
-            if (!availableSkills.some((s) => s.name === name)) continue
+            if (!allSkills.some((s) => s.name === name)) continue
             seen.add(name)
             mentioned.push(name)
           }
@@ -699,7 +700,7 @@ ${entries}
             const toLoad = mentioned.slice(0, MAX_AUTOLOAD)
             const overflow = mentioned.slice(MAX_AUTOLOAD)
             for (const name of toLoad) {
-              const info = availableSkills.find((s) => s.name === name)
+              const info = allSkills.find((s) => s.name === name)
               if (!info) continue
               const part = yield* sessions.updatePart({
                 id: PartID.ascending(),
