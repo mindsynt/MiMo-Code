@@ -675,7 +675,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
       }
     }
 
-    return { type: "json", value: output as never }
+    return { type: "json", value: (output === undefined ? null : output) as never }
   }
 
   for (const msg of input) {
