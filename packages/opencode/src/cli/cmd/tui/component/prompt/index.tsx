@@ -1,4 +1,4 @@
-import { BoxRenderable, RGBA, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes } from "@opentui/core"
+import { BoxRenderable, RGBA, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, TextAttributes } from "@opentui/core"
 import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
@@ -32,6 +32,7 @@ import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util"
 import { formatDuration } from "@/util/format"
+import { SessionRetry } from "@/session/retry"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
@@ -1861,20 +1862,33 @@ export function Prompt(props: PromptProps) {
                       }
                     }
 
-                    const retryText = () => {
+                    // A rate-limit gets a clean, distinct label instead of the
+                    // raw provider message; other errors show the truncated
+                    // clean message. The attempt/countdown is a SEPARATE styled
+                    // status segment, not concatenated into the message string,
+                    // so it renders as structure rather than raw text. See T30.
+                    const isRateLimit = createMemo(() => {
+                      const r = retry()
+                      return r ? SessionRetry.isRateLimitMessage(r.message) : false
+                    })
+                    const label = createMemo(() => (isRateLimit() ? "Rate limited" : message()))
+                    const statusText = createMemo(() => {
                       const r = retry()
                       if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
                       const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
+                      return `attempt #${r.attempt}${duration ? ` · retrying in ${duration}` : " · retrying"}`
+                    })
 
                     return (
                       <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
+                        <box flexDirection="row" gap={1} onMouseUp={handleMessageClick}>
+                          <text fg={isRateLimit() ? theme.warning : theme.error} attributes={TextAttributes.BOLD}>
+                            {label()}
+                          </text>
+                          <Show when={isTruncated()}>
+                            <text fg={theme.textMuted}>(click to expand)</text>
+                          </Show>
+                          <text fg={theme.textMuted}>{statusText()}</text>
                         </box>
                       </Show>
                     )

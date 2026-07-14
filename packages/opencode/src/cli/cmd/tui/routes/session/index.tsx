@@ -63,6 +63,7 @@ import { WorkflowTree } from "@tui/component/workflow-tree"
 import { SubagentFooter } from "./subagent-footer.tsx"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import { Flag } from "@/flag/flag"
+import { parseActorNotification } from "@/inbox/render"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
 import * as Clipboard from "../../util/clipboard"
@@ -1473,6 +1474,18 @@ function UserMessage(props: {
     })[0]
   })
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
+  // Orchestrator actor-notifications arrive as a synthetic user text part whose
+  // text is the pre-rendered <actor-notification> wrapper (inbox/render.ts).
+  // Detect + parse it into a compact status card instead of showing raw XML.
+  // Gated on the orchestrator flag so non-orchestrator sessions are untouched.
+  const actorNotification = createMemo(() => {
+    if (!Flag.MIMOCODE_EXPERIMENTAL_ORCHESTRATOR) return undefined
+    return props.parts.flatMap((x) => {
+      if (x.type !== "text" || !x.synthetic) return []
+      const parsed = parseActorNotification(x.text)
+      return parsed ? [parsed] : []
+    })[0]
+  })
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
@@ -1517,7 +1530,41 @@ function UserMessage(props: {
           )
         }}
       </Show>
-      <Show when={text()}>
+      <Show when={actorNotification()}>
+        {(note) => {
+          // Map each status to an icon + theme color. Mirrors the cronFire
+          // badge styling so orchestrator notifications read as first-class
+          // structured rows rather than raw <actor-notification> XML.
+          const style = createMemo(() => {
+            const s = note().status
+            if (s === "completed") return { icon: "✓", fg: theme.success, label: "completed" }
+            if (s === "failed") return { icon: "✗", fg: theme.error, label: "failed" }
+            if (s === "stalled") return { icon: "⏳", fg: theme.warning, label: "stalled" }
+            return { icon: "⊜", fg: theme.textMuted, label: "cancelled" }
+          })
+          return (
+            <box
+              id={props.message.id}
+              marginTop={props.index === 0 ? 0 : 1}
+              paddingLeft={2}
+              flexDirection="row"
+              gap={1}
+            >
+              <text fg={theme.textMuted}>
+                <span style={{ bg: theme.backgroundElement, fg: style().fg, bold: true }}>
+                  {" "}
+                  {style().icon} actor {style().label}{" "}
+                </span>
+                <span style={{ fg: theme.text }}> {note().description}</span>
+                <Show when={note().summary}>
+                  <span style={{ fg: theme.textMuted }}> — {note().summary}</span>
+                </Show>
+              </text>
+            </box>
+          )
+        }}
+      </Show>
+      <Show when={text() && !actorNotification()}>
         <box
           id={props.message.id}
           border={["left"]}
@@ -1750,9 +1797,34 @@ const PART_MAPPING = {
 
 type MessageError = NonNullable<AssistantMessage["error"]>
 
+// Classify a terminal assistant error so the render layer can present it as a
+// structured, visually-distinct card (distinct label + color) rather than
+// dumping a raw provider blob into the transcript. A rate-limit gets its own
+// kind so the header reads "Rate limited" instead of a generic error. See T30.
+function errorKind(error: MessageError): "rate-limit" | "error" {
+  if (error.name === "APIError") {
+    const data = error.data as { statusCode?: number; responseBody?: string; message?: string }
+    if (
+      data.statusCode === 429 ||
+      SessionRetry.isRateLimitMessage(data.message ?? "") ||
+      (typeof data.responseBody === "string" && SessionRetry.isRateLimitMessage(data.responseBody))
+    ) {
+      return "rate-limit"
+    }
+  }
+  return "error"
+}
+
 function errorBody(error: MessageError): string {
   if (error.name === "MessageOutputLengthError") return "Output length limit reached"
-  return (error.data as { message?: string }).message ?? "Unknown error"
+  const message = (error.data as { message?: string }).message ?? "Unknown error"
+  // A 429 that reaches a TERMINAL assistant error (retries exhausted, or a shape
+  // retryable() didn't classify) would otherwise dump the raw provider blob here.
+  // Present a clean rate-limit message instead of leaking JSON/HTML. See T18/T30.
+  if (errorKind(error) === "rate-limit") {
+    return "The provider is rate limiting. Please wait a moment and try again."
+  }
+  return message
 }
 
 function errorMeta(error: MessageError): string | undefined {
@@ -1769,20 +1841,39 @@ function errorMeta(error: MessageError): string | undefined {
 
 function ErrorBlock(props: { error: MessageError }) {
   const { theme } = useTheme()
+  const kind = createMemo(() => errorKind(props.error))
+  const color = createMemo(() => (kind() === "rate-limit" ? theme.warning : theme.error))
+  const label = createMemo(() => (kind() === "rate-limit" ? "Rate limited" : "Error"))
   const meta = createMemo(() => errorMeta(props.error))
+  // Render as a structured, visually-distinct card (left border + panel bg),
+  // consistent with the workflow/permission cards, so a terminal error never
+  // looks like raw text pasted into the transcript. See T30.
   return (
-    <box flexDirection="column" paddingLeft={3} marginTop={1}>
-      <text fg={theme.error} wrapMode="word">
-        <span style={{ fg: theme.error }}>✗ </span>
-        {errorBody(props.error)}
-      </text>
-      <Show when={meta()}>
-        <box paddingLeft={3}>
-          <text fg={theme.textMuted} wrapMode="word">
-            {meta()}
-          </text>
-        </box>
-      </Show>
+    <box
+      flexDirection="column"
+      border={["left"]}
+      customBorderChars={SplitBorder.customBorderChars}
+      borderColor={color()}
+      backgroundColor={theme.backgroundPanel}
+      paddingTop={1}
+      paddingBottom={1}
+      paddingLeft={2}
+      marginTop={1}
+      gap={1}
+    >
+      <box flexDirection="row" gap={1} paddingLeft={3}>
+        <text fg={color()} attributes={TextAttributes.BOLD}>
+          ✗ {label()}
+        </text>
+        <Show when={meta()}>
+          <text fg={theme.textMuted}>· {meta()}</text>
+        </Show>
+      </box>
+      <box paddingLeft={3}>
+        <text fg={theme.text} wrapMode="word">
+          {errorBody(props.error)}
+        </text>
+      </box>
     </box>
   )
 }

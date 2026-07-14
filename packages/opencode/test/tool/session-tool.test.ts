@@ -316,6 +316,51 @@ describe("session tool", () => {
     ),
   )
 
+  it.live("list excludes subagent sessions (checkpoint-writer) parented to the orchestrator", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const actorReg = yield* ActorRegistry.Service
+        const parent = yield* sessions.create({ title: "Parent" })
+
+        const info = yield* SessionTool
+        const tool = yield* info.init()
+
+        // A real peer child — this SHOULD appear in the listing.
+        const peer = yield* tool.execute(
+          { operation: { action: "create", task: "real work", mode: "build", title: "Peer" } },
+          ctx(parent.id),
+        )
+        const peerID = peer.metadata.sessionID!
+
+        // A subagent child: same parent linkage (checkpoint-writer / dream /
+        // distill and read-only fork children are all parented to us via the
+        // Session row), but registered as mode:"subagent" with a system agent.
+        // This must NOT appear in the orchestrator's child listing.
+        const sub = yield* sessions.create({ title: "checkpoint-writer: T1", parentID: parent.id })
+        yield* actorReg.register({
+          sessionID: sub.id,
+          actorID: sub.id,
+          mode: "subagent",
+          agent: "checkpoint-writer",
+          description: "checkpoint",
+          contextMode: "full",
+          background: true,
+          lifecycle: "ephemeral",
+        })
+
+        const result = yield* tool.execute({ operation: { action: "list" } }, ctx(parent.id))
+
+        // Only the peer is listed; the checkpoint-writer subagent is filtered.
+        expect(result.title).toBe("Child sessions: 1")
+        expect(result.output).toContain(peerID)
+        expect(result.output).toContain("Peer")
+        expect(result.output).not.toContain(sub.id)
+        expect(result.output).not.toContain("checkpoint-writer")
+      }),
+    ),
+  )
+
   it.live("list returns an empty message when there are no children", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
@@ -929,6 +974,54 @@ describe("session tool ask (fork-query) functional", () => {
         for (const banned of ["write", "edit", "bash", "apply_patch", "notebook_edit"]) {
           expect(forkTools).not.toContain(banned)
         }
+      }),
+      { git: true, config: askProviderCfg },
+    ),
+    60000,
+  )
+
+  // Regression: a PEER child (created via `session create`) persists its turns
+  // under agent_id = <its own sessionID>, NOT "main". The old forkQuery read
+  // only the "main" slice, so `ask` reported "no activity yet" for every peer
+  // child — the orchestrator's diagnostic blind spot. Here the target has real
+  // history ONLY under its own-session slice; ask must still answer from it.
+  askIt.live("ask answers from a peer child's own-session slice (no false no-activity)", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ llm }) {
+        const sessions = yield* Session.Service
+
+        const target = yield* sessions.create({
+          title: "Peer child with history",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        })
+        // History lives under agent_id === target.id (the peer's own slice),
+        // exactly as SessionPrompt persists a peer actor's turns — the "main"
+        // slice is left empty on purpose to mirror a real peer child.
+        yield* sessions.updateMessage({
+          id: MessageID.ascending(),
+          role: "user" as const,
+          sessionID: target.id,
+          agentID: target.id,
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+        } as unknown as MessageV2.Info)
+
+        yield* llm.text("The child read the config and is wiring the login route.")
+
+        const info = yield* SessionTool
+        const tool = yield* info.init()
+        const result = yield* tool.execute(
+          { operation: { action: "ask", session_id: target.id, question: "what did you find?" } },
+          ctx(target.id),
+        )
+
+        expect(result.title).toBe(`Asked ${target.id}`)
+        expect(result.output.length).toBeGreaterThan(0)
+        expect(result.output).not.toContain("no activity yet")
+        // A fork child was spawned to answer (the empty-history path does not).
+        const children = yield* sessions.children(target.id)
+        expect(children.length).toBe(1)
       }),
       { git: true, config: askProviderCfg },
     ),
