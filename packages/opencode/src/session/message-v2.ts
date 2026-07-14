@@ -2,7 +2,14 @@ import { BusEvent } from "@/bus/bus-event"
 import { SessionID, MessageID, PartID } from "./schema"
 import z from "zod"
 import { NamedError } from "@mimo-ai/shared/util/error"
-import { APICallError, convertToModelMessages, LoadAPIKeyError, RetryError, type ModelMessage, type UIMessage } from "ai"
+import {
+  APICallError,
+  convertToModelMessages,
+  LoadAPIKeyError,
+  RetryError,
+  type ModelMessage,
+  type UIMessage,
+} from "ai"
 import { LSP } from "../lsp"
 import { Snapshot } from "@/snapshot"
 import { SyncEvent } from "../sync"
@@ -805,7 +812,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
                 state: "output-error",
                 toolCallId: part.callID,
                 input: part.state.input,
-                errorText: part.state.error,
+                errorText: errorMessage(part.state.error),
                 ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
                 ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
               })
@@ -884,10 +891,7 @@ export function page(input: { sessionID: SessionID; limit: number; before?: stri
   // Slice contract: agentID `undefined` (default) ⇒ main slice only;
   // `"*"` ⇒ every slice (full-stream opt-out for export/stats/share/etc.);
   // any other string ⇒ that subagent's actorID slice.
-  const agentClause =
-    input.agentID === "*"
-      ? undefined
-      : eq(MessageTable.agent_id, input.agentID ?? "main")
+  const agentClause = input.agentID === "*" ? undefined : eq(MessageTable.agent_id, input.agentID ?? "main")
   const where = and(
     eq(MessageTable.session_id, input.sessionID),
     ...(before ? [older(before)] : []),
@@ -1035,10 +1039,7 @@ export function fromError(
     case RetryError.isInstance(e): {
       const inner = e.lastError ?? e.errors[e.errors.length - 1]
       if (inner !== undefined && inner !== e) return fromError(inner, ctx)
-      return new APIError(
-        { message: e.message, isRetryable: true },
-        { cause: e },
-      ).toObject()
+      return new APIError({ message: e.message, isRetryable: true }, { cause: e }).toObject()
     }
     case OutputLengthError.isInstance(e):
       return e

@@ -1,6 +1,7 @@
 import { APICallError } from "ai"
 import { STATUS_CODES } from "http"
 import { iife } from "@/util/iife"
+import { Log } from "@/util"
 import type { ProviderID } from "./schema"
 
 // Adapted from overflow detection patterns in:
@@ -167,6 +168,11 @@ export function parseStreamError(input: unknown): ParsedStreamError | undefined 
         responseBody,
       }
     case "invalid_prompt":
+      Log.Default.error("ModelMessage[] validation failed", {
+        message: body?.error?.message,
+        cause: body?.error,
+        responseBody,
+      })
       return {
         type: "api_error",
         message: typeof body?.error?.message === "string" ? body?.error?.message : "Invalid prompt.",
